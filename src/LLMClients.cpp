@@ -3,6 +3,7 @@
 #include <sstream>
 #include <string>
 #include <algorithm>
+#include <map>
 
 const std::string SUMMARY_PROMPT = R"(You are a helpful meeting assistant. The following is a raw transcription of a meeting. Please structure this into a clean Markdown note. Include:
 1. A concise Summary.
@@ -16,27 +17,51 @@ Transcription:
 const std::string TITLE_PROMPT = R"(Based on the following meeting transcription, generate a concise and descriptive title (2-7 words) for the meeting. Your response MUST contain ONLY the title text, as a single line, and nothing else. Transcription:
 )";
 
-const std::string OBSIDIAN_MASTER_PROMPT = R"(You are a helpful meeting assistant. The following is a raw transcription of a meeting. Please extract the following information and present it in a clearly delimited plain-text format. Strictly follow the output format described below. DO NOT ADD any other text, explanations, or markdown formatting outside the specified delimiters. Extract information only from the provided transcription.
+std::string get_obsidian_prompt(const std::string& persona) {
+    std::string persona_instruction;
+    if (persona == "dev") {
+        persona_instruction = "You are a Senior Technical Lead. Focus intensely on architectural decisions, code snippets mentioned, technical debt, bugs, and library choices. Ignore marketing fluff.";
+    } else if (persona == "pm") {
+        persona_instruction = "You are a Project Manager. Focus purely on deliverables, dates, blockers, assignees, and timeline risks. Be concise and action-oriented.";
+    } else if (persona == "exec") {
+        persona_instruction = "You are an Executive Assistant. Provide a high-level strategic overview. Focus on ROI, key outcomes, and budget impact. Bullet points only. No fluff.";
+    } else {
+        persona_instruction = "You are a helpful Meeting Assistant. Provide a balanced, comprehensive summary covering all aspects.";
+    }
+
+    return persona_instruction + R"(
+The following is a raw transcription of a meeting. Please extract the following information and present it in a clearly delimited plain-text format. Strictly follow the output format described below. DO NOT ADD any other text, explanations, or markdown formatting outside the specified delimiters. Extract information only from the provided transcription.
 
 ---PARTICIPANTS---
 <Comma-separated list of participant names. Example: John Doe, Jane Smith. Infer from context if not explicit. Leave blank if none.>
 ---TAGS---
 <Comma-separated list of relevant tags (without #). Example: meeting, project-x, AI. Leave blank if none.>
+---TOPIC---
+<A 1-3 word primary topic for the meeting. Example: Authentication Refactor.>
 ---YAML_SUMMARY---
 <A brief, one-sentence overview of the meeting, enclosed in double quotes.>
 ---OVERVIEW_SUMMARY---
 <A concise, 2-3 sentence overview summary paragraph of the entire meeting.>
+---KEY_TAKEAWAYS---
+<3-5 most critical points discussed or decided, as a Markdown bulleted list.>
 ---AGENDA_ITEMS---
 <Key agenda items, as a Markdown bulleted list.>
 ---DISCUSSION_POINTS---
 <Key discussion points, as a Markdown bulleted list. Use wikilinks `[[Link]]` for key concepts/people and `#tags`.>
 ---DECISIONS_MADE---
 <All decisions made, as a Markdown bulleted list. Use wikilinks `[[Link]]` and `#decision` tag.>
+---QUESTIONS_ARISEN---
+<Any specific questions, uncertainties, or topics requiring further clarification that arose during the meeting, as a Markdown bulleted list.>
 ---ACTION_ITEMS---
 <All action items, as a Markdown bulleted list with checkboxes. Assign to `[[Person]]` with a due date (YYYY-MM-DD) and `#todo` tag.>
+---MERMAID_GRAPH---
+<A Mermaid.js graph definition (e.g., `graph TD; A-->B;`) visualizing the relationships between discussed topics, people, and decisions. Do not include markdown code block backticks (```mermaid), just the code.>
+---EMAIL_DRAFT---
+<A professional follow-up email draft summarizing the meeting for the attendees. Include a subject line and body.>
 
 Transcription:
 )";
+}
 
 OllamaClient::OllamaClient(const std::string& model, const std::string& baseUrl) : model(model), baseUrl(baseUrl) {}
 std::string OllamaClient::generateSummary(const std::string& transcription) {

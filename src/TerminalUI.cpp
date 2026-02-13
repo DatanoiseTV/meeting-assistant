@@ -80,7 +80,7 @@ void TerminalUI::loop() {
             text(" Status: ") | bold,
             status_color,
             filler(),
-            text(" Meeting Assistant Pro ") | color(Color::BlueLight)
+            text(" Meeting Assistant ") | color(Color::BlueLight)
         });
         
         // Meter

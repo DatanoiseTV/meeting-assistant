@@ -35,4 +35,4 @@ public:
 };
 extern const std::string SUMMARY_PROMPT;
 extern const std::string TITLE_PROMPT;
-extern const std::string OBSIDIAN_MASTER_PROMPT;
+std::string get_obsidian_prompt(const std::string& persona);

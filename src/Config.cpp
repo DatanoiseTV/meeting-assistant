@@ -32,6 +32,7 @@ Config::Data Config::load() {
             if (j.contains("output_dir")) data.output_dir = j["output_dir"];
             if (j.contains("mode")) data.mode = j["mode"];
             if (j.contains("obsidian_vault_path")) data.obsidian_vault_path = j["obsidian_vault_path"];
+            if (j.contains("persona")) data.persona = j["persona"];
             if (j.contains("vad_threshold")) data.vad_threshold = j["vad_threshold"];
             if (j.contains("vad_silence_ms")) data.vad_silence_ms = j["vad_silence_ms"];
         } catch (const std::exception& e) {
@@ -50,6 +51,7 @@ void Config::save(const Data& data) {
     j["output_dir"] = data.output_dir;
     j["mode"] = data.mode;
     j["obsidian_vault_path"] = data.obsidian_vault_path;
+    j["persona"] = data.persona;
     j["vad_threshold"] = data.vad_threshold;
     j["vad_silence_ms"] = data.vad_silence_ms;
 
