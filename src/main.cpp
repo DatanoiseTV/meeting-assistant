@@ -27,7 +27,6 @@ void signal_handler(int s) {
 }
 
 void trim(std::string& s) {
-    if (s.empty()) return;
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
     s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
     if (s.size() >= 2 && s.front() == '"' && s.back() == '"') s = s.substr(1, s.size() - 2);
@@ -51,60 +50,31 @@ std::string format_timestamp(int64_t t_ms) {
 }
 
 std::string md_to_html(const std::string& md) {
-    std::stringstream html;
+    std::stringstream ss;
     std::istringstream iss(md);
     std::string line;
     bool in_list = false;
-
-    auto process_inline = [](std::string s) {
-        // Bold **text**
-        size_t b;
-        while ((b = s.find("**")) != std::string::npos) {
-            size_t e = s.find("**", b + 2);
-            if (e != std::string::npos) {
-                s.replace(e, 2, "</strong>");
-                s.replace(b, 2, "<strong>");
-            } else break;
-        }
-        // Wikilinks [[Text]]
-        while ((b = s.find("[[")) != std::string::npos) {
-            size_t e = s.find("]]", b + 2);
-            if (e != std::string::npos) {
-                s.erase(e, 2);
-                s.erase(b, 2);
-            } else break;
-        }
-        return s;
-    };
-
     while (std::getline(iss, line)) {
-        std::string raw = line;
         trim(line);
         if (line.empty()) continue;
-
-        if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0) {
-            if (!in_list) { html << "<ul>"; in_list = true; }
-            std::string content = line.substr(2);
-            trim(content);
-            // Checkboxes
-            if (content.rfind("[ ]", 0) == 0) content = "☐ " + content.substr(3);
-            else if (content.rfind("[x]", 0) == 0) content = "☑ " + content.substr(3);
-            html << "<li>" << process_inline(content) << "</li>";
+        if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0 || line.rfind("- [ ] ", 0) == 0 || line.rfind("- [x] ", 0) == 0) {
+            if (!in_list) { ss << "<ul>"; in_list = true; }
+            size_t bullet_len = (line.find("[ ]") != std::string::npos || line.find("[x]") != std::string::npos) ? 6 : 2;
+            ss << "<li>" << line.substr(bullet_len) << "</li>";
         } else {
-            if (in_list) { html << "</ul>"; in_list = false; }
-            if (line.rfind("### ", 0) == 0) html << "<h4>" << process_inline(line.substr(4)) << "</h4>";
-            else if (line.rfind("## ", 0) == 0) html << "<h3>" << process_inline(line.substr(3)) << "</h3>";
-            else if (line.rfind("# ", 0) == 0) html << "<h2>" << process_inline(line.substr(2)) << "</h2>";
-            else if (line.rfind("> ", 0) == 0) html << "<blockquote>" << process_inline(line.substr(2)) << "</blockquote>";
-            else html << "<p>" << process_inline(line) << "</p>";
+            if (in_list) { ss << "</ul>"; in_list = false; }
+            if (line.rfind("# ", 0) == 0) ss << "<h2>" << line.substr(2) << "</h2>";
+            else if (line.rfind("## ", 0) == 0) ss << "<h3>" << line.substr(3) << "</h3>";
+            else if (line.rfind("> ", 0) == 0) ss << "<blockquote>" << line.substr(2) << "</blockquote>";
+            else ss << "<p>" << line << "</p>";
         }
     }
-    if (in_list) html << "</ul>";
-    return html.str();
+    if (in_list) ss << "</ul>";
+    return ss.str();
 }
 
 void print_usage(const char* prog) {
-    std::cout << "Meeting Assistant - Audio Transcription & AI Analysis\n\n";
+    std::cout << "Meeting Assistant - Audio Transcription & Analysis\n\n";
     std::cout << "Usage: " << prog << " [-f <input.wav> | -l] [options]\n\n";
     std::cout << "Options:\n";
     std::cout << "  -f, --file <path>      Input WAV file.\n";
@@ -115,7 +85,7 @@ void print_usage(const char* prog) {
     std::cout << "  -p <provider>          LLM Provider: ollama, gemini, openai.\n";
     std::cout << "  -k <key>               API Key or base URL.\n";
     std::cout << "  -L <model>             LLM Model name.\n";
-    std::cout << "  --obsidian-vault-path  Path to your Obsidian vault root.\n";
+    std::cout << "  --obsidian-vault-path  Path to your Obsidian vault.\n";
     std::cout << "  --save-config          Save provided flags as default.\n";
 }
 
@@ -135,7 +105,7 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     std::cout << "Generating AI Analysis (" << config.persona << ")..." << std::endl;
     std::string master = client->generateSummary(get_obsidian_prompt(config.persona) + transcription);
     
-    if (master.empty() || (master.find("Error") != std::string::npos && master.length() < 150)) {
+    if (master.empty() || (master.find("Error") != std::string::npos && master.length() < 100)) {
         std::cerr << "LLM Error: " << master << std::endl;
         return;
     }
@@ -146,10 +116,9 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
         return c.substr(st, (en == std::string::npos) ? std::string::npos : en - st);
     };
     auto tsec = [](std::string& s) {
-        trim(s);
-        // Remove trailing delimiters if LLM was sloppy
-        if (s.length() >= 3 && s.substr(s.length()-3) == "---") s = s.substr(0, s.length()-3);
-        trim(s);
+        s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+        s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
+        if (s.size() >= 2 && s.front() == '"' && s.back() == '"') s = s.substr(1, s.size() - 2);
     };
 
     std::string title = ext(master, "---TITLE---"); tsec(title);
@@ -183,38 +152,36 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
 
     // Markdown
     std::stringstream note;
-    note << "---\ndate: " << date_ss.str() << "\ntype: meeting\ntopic: " << (topic.empty()?"N/A":topic) << "\nparticipants: [" << p << "]\ntags: [" << t << "]\nsummary: " << ys << "\n---\n\n";
-    note << "Status:: #processed\n\n> [!ABSTRACT] Summary\n> " << os << "\n\n> [!IMPORTANT] Takeaways\n" << kt << "\n\n";
-    if (!research.empty()) note << "> [!INFO] Research\n" << research << "\n\n";
-    if (!graph.empty() && graph.length() > 10) note << "## Map\n```mermaid\n" << graph << "\n```\n\n";
-    note << "## Meeting Details\n\n### Agenda\n" << ai << "\n\n### Discussion\n" << dp << "\n\n### Questions\n" << qa << "\n\n## Outcomes\n\n### Decisions\n" << dm << "\n\n### Action Items\n" << acts << "\n\n## Appendix\n<details><summary>Transcript</summary>\n\n```\n" << transcription << "\n```\n</details>\n";
+    note << "---\ndate: " << date_ss.str() << "\ntype: meeting\ntopic: " << (topic.empty() ? "N/A" : topic) << "\nparticipants: [" << p << "]\ntags: [" << t << "]\nsummary: " << ys << "\n---\n\n";
+    note << "Status:: #processed\n\n> [!ABSTRACT] Executive Summary\n> " << os << "\n\n> [!IMPORTANT] Key Takeaways\n" << (kt.empty() ? "> - N/A" : kt) << "\n\n";
+    if (!research.empty()) note << "> [!INFO] AI Research\n" << research << "\n\n";
+    if (!graph.empty() && graph.length() > 10) note << "## Visual Map\n```mermaid\n" << graph << "\n```\n\n";
+    note << "## Meeting Details\n\n### Agenda\n" << (ai.empty() ? "- N/A" : ai) << "\n\n### Discussion\n" << (dp.empty() ? "- N/A" : dp) << "\n\n### Questions\n" << (qa.empty() ? "- N/A" : qa) << "\n\n## Outcomes\n\n### Decisions\n" << (dm.empty() ? "- N/A" : dm) << "\n\n### Action Items\n" << (acts.empty() ? "- [ ] N/A" : acts) << "\n\n## Appendix\n\n#### Raw Transcription\n<details><summary>Click to expand</summary>\n\n```\n" << transcription << "\n```\n</details>\n";
     std::ofstream(finalOutputDir + "/" + fBase + ".md") << note.str();
 
-    // HTML (Refined Tidy Design)
+    // HTML
     std::stringstream html;
-    html << "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>" << title << "</title><style>"
-         << "body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#1a1a1a;max-width:850px;margin:40px auto;padding:20px;background:#f8f9fa}"
-         << ".card{background:#fff;padding:40px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);border:1px solid #e9ecef}"
-         << "h1{color:#0056b3;margin-bottom:8px;font-size:2.2em;border-bottom:3px solid #0056b3;padding-bottom:10px} "
-         << ".meta{color:#6c757d;font-size:0.95em;margin-bottom:30px} "
-         << ".callout{padding:20px;border-radius:8px;margin:25px 0;border-left:6px solid #dee2e6}"
-         << ".abstract{background:#e7f3ff;border-left-color:#007bff} .important{background:#fff4e5;border-left-color:#ffc107} .info{background:#eafaf1;border-left-color:#28a745}"
-         << "h2{color:#343a40;font-size:1.6em;margin-top:40px;padding-bottom:5px;border-bottom:1px solid #dee2e6} h3{color:#495057;font-size:1.2em;margin-top:25px}"
-         << "ul{padding-left:20px} li{margin-bottom:8px} blockquote{font-style:italic;color:#6c757d;border-left:4px solid #dee2e6;padding-left:15px;margin:15px 0}"
-         << "pre{background:#212529;color:#f8f9fa;padding:20px;border-radius:8px;overflow-x:auto;font-family:monospace;font-size:0.85em}"
+    html << "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>" << title << "</title><style>"
+         << "body{font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#333;max-width:850px;margin:40px auto;padding:20px;background:#f4f7f9}"
+         << ".card{background:#fff;padding:35px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.08);margin-bottom:25px}"
+         << "h1{color:#1a73e8;margin-bottom:5px;font-size:2.2em} .meta{color:#777;font-size:0.95em;margin-bottom:25px;border-bottom:2px solid #f0f0f0;padding-bottom:15px}"
+         << ".callout{padding:20px;border-radius:10px;margin:20px 0;line-height:1.5} .abstract{background:#e8f0fe;border-left:6px solid #1a73e8}"
+         << ".important{background:#fff9e6;border-left:6px solid #f9ab00} .info{background:#e6f4ea;border-left:6px solid #1e8e3e}"
+         << "h2{color:#2c3e50;border-bottom:1px solid #eee;padding-bottom:8px;margin-top:30px} h3{color:#34495e;margin-top:20px} "
+         << "ul{padding-left:25px} li{margin-bottom:8px} pre{background:#2d3436;color:#dfe6e9;padding:20px;border-radius:8px;overflow-x:auto;font-size:0.9em}"
          << "</style></head><body><div class='card'>"
-         << "<h1>" << title << "</h1><div class='meta'><strong>Date:</strong> " << date_ss.str() << " | <strong>Attendees:</strong> " << p << "</div>"
-         << "<div class='callout abstract'><strong>Summary</strong><p>" << os << "</p></div>"
-         << "<div class='callout important'><strong>Key Takeaways</strong>" << md_to_html(kt) << "</div>";
-    if (!research.empty()) html << "<div class='callout info'><strong>AI Research</strong>" << md_to_html(research) << "</div>";
-    html << "<h2>Meeting Details</h2><h3>Agenda</h3>" << md_to_html(ai) << "<h3>Discussion Points</h3>" << md_to_html(dp);
-    if (!qa.empty()) html << "<h3>Questions Arisen</h3>" << md_to_html(qa);
+         << "<h1>" << title << "</h1><div class='meta'><strong>Date:</strong> " << date_ss.str() << " | <strong>Participants:</strong> " << p << "</div>"
+         << "<div class='callout abstract'><strong>Executive Summary:</strong><p>" << os << "</p></div>"
+         << "<div class='callout important'><strong>Key Takeaways:</strong>" << md_to_html(kt) << "</div>";
+    if (!research.empty()) html << "<div class='callout info'><strong>AI Research & Suggestions:</strong>" << md_to_html(research) << "</div>";
+    html << "<h2>Agenda</h2>" << md_to_html(ai) << "<h2>Discussion Points</h2>" << md_to_html(dp);
+    if (!qa.empty()) html << "<h2>Questions Arisen</h2>" << md_to_html(qa);
     html << "<h2>Outcomes</h2><h3>Decisions</h3>" << md_to_html(dm) << "<h3>Action Items</h3>" << md_to_html(acts);
-    html << "<h2>Appendix</h2><h3>Transcription</h3><pre>" << transcription << "</pre></div></body></html>";
+    html << "<h2>Raw Transcript</h2><pre>" << transcription << "</pre></div></body></html>";
     std::ofstream(finalOutputDir + "/" + fBase + ".html") << html.str();
     
     if (!email.empty()) std::ofstream(finalOutputDir + "/" + fBase + "_email.txt") << email;
-    std::cout << "[Success] Reports saved: " << fBase << "\n";
+    std::cout << "[Success] Reports saved to " << fBase << "\n";
 }
 
 int main(int argc, char** argv) {
@@ -240,7 +207,7 @@ int main(int argc, char** argv) {
         else if (arg == "--vad-threshold" && i + 1 < argc) config.vad_threshold = std::stof(argv[++i]);
         else if (arg == "--save-config") saveConfig = true;
         else if (arg == "--help" || arg == "-h") { print_usage(argv[0]); return 0; }
-        else { std::cerr << "Unknown arg: " << arg << "\n"; print_usage(argv[0]); return 1; }
+        else { std::cerr << "Unknown argument: " << arg << "\n"; print_usage(argv[0]); return 1; }
     }
 
     if (saveConfig) { Config::save(config); return 0; }
@@ -263,7 +230,26 @@ int main(int argc, char** argv) {
             auto start_time = std::chrono::steady_clock::now();
             float total_rms = 0; int rms_count = 0; std::vector<float> pcmf32_data;
 
+            // Main Recording Loop
             while (!shutdown_requested && !TerminalUI::isFinishRequested()) {
+                // Check Copilot request
+                if (showUI && TerminalUI::isCopilotRequested()) {
+                    if (!config.provider.empty()) {
+                        std::string q = TerminalUI::getCopilotQuestion();
+                        auto client = ClientFactory::createClient(config.provider, config.api_key, config.llm_model);
+                        if (client) {
+                            std::string prompt = "You are a helpful meeting assistant. Context: " + rolling_context + "\n\nUser Question: " + q + "\n\nAnswer concisely:";
+                            std::string ans = client->generateSummary(prompt);
+                            TerminalUI::showCopilotResponse(ans);
+                        } else {
+                            TerminalUI::showCopilotResponse("Error: No LLM client.");
+                        }
+                    } else {
+                        TerminalUI::showCopilotResponse("Please configure LLM provider (-p).");
+                    }
+                    TerminalUI::resetCopilotRequest();
+                }
+
                 std::vector<float> chunk;
                 if (audioCapture.getAudioChunk(chunk, chunk_samples)) {
                     pcmf32_data.insert(pcmf32_data.end(), chunk.begin(), chunk.end());
@@ -292,12 +278,18 @@ int main(int argc, char** argv) {
             audioCapture.stopCapture();
             bool is_new = TerminalUI::isNewMeetingRequested();
             if (showUI) { TerminalUI::stop(); if (ui_thread.joinable()) ui_thread.join(); }
-            auto now = std::chrono::system_clock::now(); auto t_now = std::chrono::system_clock::to_time_t(now);
-            std::stringstream ss; ss << std::put_time(std::localtime(&t_now), "%Y%m%d_%H%M%S");
-            save_meeting_reports(trans_text.str(), config, "meeting_" + ss.str());
+            
+            // Generate reports only if we have data
+            if (!trans_text.str().empty()) {
+                auto now = std::chrono::system_clock::now(); auto t_now = std::chrono::system_clock::to_time_t(now);
+                std::stringstream ss; ss << std::put_time(std::localtime(&t_now), "%Y%m%d_%H%M%S");
+                save_meeting_reports(trans_text.str(), config, "meeting_" + ss.str());
+            }
+            
             if (!is_new) keep_running = false; else TerminalUI::resetNewMeetingRequest();
         }
     } else {
+        // File input (same as before)
         std::ifstream file(wavPath, std::ios::binary); if (!file.is_open()) return 1;
         char bh[4]; file.read(bh, 4); file.ignore(4); file.read(bh, 4);
         uint16_t af=0, nc=0, bps=0; uint32_t sr=0, ds=0;

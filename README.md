@@ -4,40 +4,45 @@
 
 # Meeting Assistant
 
-Meeting Assistant transforms your spoken conversations into structured, actionable knowledge. It handles real-time transcription, deep AI analysis, and generates professional reports tailored for your specific role.
+Meeting Assistant is a high-performance terminal application that transforms spoken conversations into structured knowledge. It combines real-time transcription with deep AI analysis to generate professional reports, visual mind maps, and actionable insights tailored to your specific professional role.
 
-## The Workflow
+## Primary Workflow
 
-1. **Speak**: Start a live session or drop in a WAV file.
-2. **Analyze**: AI identifies participants, decisions, and action items using specialized personas.
-3. **Integrate**: Results are instantly synced to your Obsidian vault and formatted as a standalone HTML report.
+1.  **Capture**: Initialize a live microphone session or process an existing WAV file.
+2.  **Analysis**: AI automatically extracts participants, key decisions, and action items using specialized role-based personas.
+3.  **Deliver**: High-quality reports are instantly generated in Markdown (for Obsidian) and standalone HTML (for sharing).
 
-## Key Outcomes
+## Core Capabilities
 
-### Structured Obsidian Notes
-Every meeting becomes a permanent node in your knowledge base. Notes include dynamic YAML properties, semantic callouts for summaries, and automated wikilinks.
+### Real-Time Dashboard & Intelligence
+*   **Interactive TUI**: A modern terminal interface with live audio metering, a blinking recording indicator, and auto-scrolling transcripts.
+*   **Live AI Copilot**: Press [Space] during any meeting to ask the AI questions about the conversation so far (e.g., "What was the deadline just mentioned?").
+*   **Intelligent VAD**: Energy-based Voice Activity Detection ensures audio is processed in natural sentence blocks based on silence.
+*   **Continuous Sessions**: Press [N] to finalize one meeting and immediately start another without restarting the application.
 
-### Visual Knowledge Graphs
-The AI automatically generates Mermaid.js diagrams to visualize the relationships between discussed topics, people, and decisions.
+### Specialized AI Analysis
+*   **Role-Based Personas**: Tailor summaries with `--persona [dev|pm|exec]`.
+    *   **Dev**: Technical depth, architecture decisions, and code snippets.
+    *   **PM**: Deliverables, blockers, timelines, and accountability.
+    *   **Exec**: ROI, high-level strategic impact, and critical outcomes.
+*   **Web Grounding**: When using Gemini, enable `--research` for real-time web research on technical terms or companies mentioned.
+*   **Visual Mapping**: Automatic generation of Mermaid.js diagrams visualizing the relationships between topics and decisions.
 
-### Professional HTML Reports
-Generate tidy, standalone HTML reports styled for corporate environments. Perfect for immediate distribution via email to stakeholders.
-
-### Fact-Checked Research
-When using Gemini, the assistant performs real-time web grounding to provide additional context and fact-check technical terms or companies mentioned in the meeting.
-
-### Role-Specific Intelligence
-Tailor the analysis by choosing a persona:
-* **Dev**: Focuses on architecture, code, and technical debt.
-* **PM**: Focuses on deliverables, deadlines, and blockers.
-* **Exec**: Focuses on high-level ROI and strategic impact.
+### Professional Output
+*   **Standalone HTML**: Tidy, beautifully styled, single-file HTML reports perfect for email distribution.
+*   **Deep Obsidian Support**: Generates notes with standard Properties, semantic callouts, and collapsible raw transcripts.
+*   **Auto-Email Drafts**: Creates a ready-to-send follow-up email text file for every session.
 
 ---
 
-## Quick Start
+## Installation
+
+### Prerequisites
+*   **CMake**: 3.14 or higher.
+*   **PortAudio**: Required for live microphone input (`brew install portaudio` on macOS).
+*   **Whisper Model**: Download a `ggml` model (e.g., `base.en`) from HuggingFace and place it in the `models/` directory.
 
 ### Build
-
 ```bash
 mkdir build && cd build
 cmake -DCMAKE_PREFIX_PATH=/opt/homebrew ..
@@ -45,28 +50,29 @@ make
 sudo make install
 ```
 
-### Usage
+---
 
+## Usage
+
+### Examples
 ```bash
-# Start a live dashboard session
-meeting_assistant -l --ui -p gemini -k YOUR_API_KEY --research
+# Start a live session with the TUI and Project Manager persona
+meeting_assistant -l --ui -p gemini -k YOUR_API_KEY --persona pm
 
-# Analyze a recorded file as a Project Manager
-meeting_assistant -f sync.wav -p gemini -k YOUR_API_KEY --persona pm
+# Process a technical recording with web research enabled
+meeting_assistant -f technical_sync.wav -p gemini -k KEY --persona dev --research
+
+# Save defaults (e.g., Obsidian vault path and API key)
+meeting_assistant --mode obsidian --obsidian-vault-path ~/MyVault -p gemini -k KEY --save-config
 ```
 
 ### Dashboard Hotkeys
-* **[N]**: Start a new meeting immediately.
-* **[Q]**: Save all reports and quit.
+*   **[Space]**: Open AI Copilot to ask a question during the meeting.
+*   **[N]**: Finalize current session and start a New Meeting.
+*   **[Q / ESC]**: Save all reports and Quit the application.
 
----
-
-## Advanced Capabilities
-
-* **Intelligent VAD**: High-accuracy silence detection ensures transcription happens in natural sentence blocks.
-* **Contextual Memory**: Whisper retains the last 200 characters of context to maintain accuracy across ongoing sentences.
-* **Format Agnostic**: Support for arbitrary WAV sample rates and bit depths with automatic mono-conversion.
-* **Persistent Settings**: Configure your vault path and API keys once in `~/.meeting_assistant/config.json`.
+## Configuration
+Settings are persisted in `~/.meeting_assistant/config.json`. This includes API keys, preferred models, and default output paths. Use the `--save-config` flag to update these via the command line.
 
 ## License
 MIT

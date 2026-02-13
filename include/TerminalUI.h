@@ -11,19 +11,35 @@ public:
     static void updateProgress(int progress);
     static void addSegment(const std::string& timestamp, const std::string& text);
     static void clearSegments();
-    static void loop(); // Main UI loop
+    static void loop(); 
     static bool isEnabled();
     static void setEnabled(bool enabled);
+    
+    // Control Flags
     static bool isFinishRequested();
     static bool isNewMeetingRequested();
     static void resetNewMeetingRequest();
     static void stop();
+
+    // Copilot Features
+    static bool isCopilotRequested();
+    static std::string getCopilotQuestion();
+    static void showCopilotResponse(const std::string& response);
+    static void resetCopilotRequest();
 
 private:
     static bool enabled;
     static bool running;
     static bool finish_requested;
     static bool new_meeting_requested;
+    
+    // Copilot State
+    static bool copilot_active;
+    static bool copilot_input_mode;
+    static std::string copilot_question;
+    static std::string copilot_response;
+    static bool copilot_query_ready;
+
     static std::string current_status;
     static float current_rms;
     static float current_threshold;
