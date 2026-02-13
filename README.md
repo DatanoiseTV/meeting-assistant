@@ -60,9 +60,25 @@ meeting_assistant -l --ui -p ollama -L llama3
 ### Prerequisites
 *   **CMake**: 3.14 or higher.
 *   **PortAudio**: Required for live microphone input (`brew install portaudio` on macOS).
-*   **Whisper Model**: Download a `ggml` model from HuggingFace and place it in the `models/` directory.
 
-### Build
+### 1. Download Whisper Model
+The application requires a Whisper model in `ggml` format. You can download these from the [whisper.cpp HuggingFace repository](https://huggingface.co/ggerganov/whisper.cpp/tree/main).
+
+| Model | Size | Speed | Accuracy | Recommended For |
+| :--- | :--- | :--- | :--- | :--- |
+| **tiny.en** | 75 MB | Fastest | Lowest | Low-power devices / Real-time testing |
+| **base.en** | 142 MB | Very Fast | Good | Standard laptops / Most meetings |
+| **small.en**| 466 MB | Fast | Great | High-accuracy requirements |
+| **medium.en**| 1.5 GB | Slow | Excellent | Post-meeting batch processing |
+| **large-v3** | 2.9 GB | Slowest | State-of-the-art | Maximum precision (requires GPU/Metal) |
+
+**Quick Download (Base Model):**
+```bash
+mkdir -p models
+curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin -o models/ggml-base.en.bin
+```
+
+### 2. Build
 ```bash
 mkdir build && cd build
 cmake -DCMAKE_PREFIX_PATH=/opt/homebrew ..
