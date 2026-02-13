@@ -8,6 +8,7 @@ public:
     static void init();
     static void setStatus(const std::string& status);
     static void updateLevel(float rms, float threshold);
+    static void updateProgress(int progress);
     static void addSegment(const std::string& timestamp, const std::string& text);
     static void clearSegments();
     static void loop(); // Main UI loop
@@ -26,6 +27,8 @@ private:
     static std::string current_status;
     static float current_rms;
     static float current_threshold;
+    static int current_progress;
     static std::vector<std::pair<std::string, std::string>> segments;
     static std::mutex data_mutex;
+    static std::chrono::steady_clock::time_point start_proc_time;
 };

@@ -36,6 +36,8 @@ The following is a raw transcription of a meeting. Please extract the following 
 <Comma-separated list of participant names. Example: John Doe, Jane Smith. Infer from context if not explicit. Leave blank if none.>
 ---TAGS---
 <Comma-separated list of relevant tags (without #). Example: meeting, project-x, AI. Leave blank if none.>
+---TITLE---
+<A concise and descriptive title (2-7 words) for the meeting.>
 ---TOPIC---
 <A 1-3 word primary topic for the meeting. Example: Authentication Refactor.>
 ---YAML_SUMMARY---
@@ -69,16 +71,43 @@ std::string OllamaClient::generateSummary(const std::string& transcription) {
     json payload = {{"model", model}, {"messages", {{{"role", "system"}, {"content", "You are a helpful meeting assistant."}}, {{"role", "user"}, {"content", transcription}}}}, {"stream", false}};
     auto response = httpClient.post(url, payload);
     if (response.status_code == 200) { try { auto j = json::parse(response.body); if (j.contains("message") && j["message"].contains("content")) return j["message"]["content"]; } catch (...) {} }
-    return "Error calling Ollama: " + std::to_string(response.status_code);
+    return "Error calling Ollama: " + std::to_string(response.status_code) + " " + response.error;
 }
+
 GeminiClient::GeminiClient(const std::string& apiKey, const std::string& model) : apiKey(apiKey), model(model) {}
 std::string GeminiClient::generateSummary(const std::string& transcription) {
     std::string url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
-    json payload = {{"contents", {{{"role", "user"}, {"parts", {{{"text", "You are a helpful meeting assistant."}}}}}, {{"role", "user"}, {"parts", {{{"text", transcription}}}}}}}};
+    json payload = {{"contents", {{{"role", "user"}, {"parts", {{{"text", transcription}}}}}}}};
     auto response = httpClient.post(url, payload);
-    if (response.status_code == 200) { try { auto j = json::parse(response.body); if (j.contains("candidates") && !j["candidates"].empty()) return j["candidates"][0]["content"]["parts"][0]["text"]; } catch (...) {} }
-    return "Error calling Gemini: " + std::to_string(response.status_code);
+    if (response.status_code == 200) {
+        try {
+            auto j = json::parse(response.body);
+            if (j.contains("candidates") && !j["candidates"].empty() && j["candidates"][0].contains("content")) {
+                return j["candidates"][0]["content"]["parts"][0]["text"];
+            }
+        } catch (...) {}
+    }
+    return "Error calling Gemini: " + std::to_string(response.status_code) + " " + response.error + " (Model: " + model + ")";
 }
+std::string GeminiClient::researchTopics(const std::string& transcription) {
+    std::string url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
+    json google_search_tool = {{"google_search", json::object()}};
+    json payload = {
+        {"contents", {{{"role", "user"}, {"parts", {{{"text", "Research the key technical terms, companies, or concepts mentioned in this meeting transcription. Provide additional context, current trends, or suggestions for each. Use Google Search grounding for accurate information.\n\nTranscription:\n" + transcription}}}}}}},
+        {"tools", {google_search_tool}}
+    };
+    auto response = httpClient.post(url, payload);
+    if (response.status_code == 200) {
+        try {
+            auto j = json::parse(response.body);
+            if (j.contains("candidates") && !j["candidates"].empty() && j["candidates"][0].contains("content")) {
+                return j["candidates"][0]["content"]["parts"][0]["text"];
+            }
+        } catch (...) {}
+    }
+    return "Research failed: " + std::to_string(response.status_code) + " " + response.error;
+}
+
 OpenAIClient::OpenAIClient(const std::string& apiKey, const std::string& model) : apiKey(apiKey), model(model) {}
 std::string OpenAIClient::generateSummary(const std::string& transcription) {
     std::string url = "https://api.openai.com/v1/chat/completions";
@@ -86,11 +115,16 @@ std::string OpenAIClient::generateSummary(const std::string& transcription) {
     std::map<std::string, std::string> headers = {{"Authorization", "Bearer " + apiKey}};
     auto response = httpClient.post(url, payload, headers);
     if (response.status_code == 200) { try { auto j = json::parse(response.body); if (j.contains("choices") && !j["choices"].empty()) return j["choices"][0]["message"]["content"]; } catch (...) {} }
-    return "Error calling OpenAI: " + std::to_string(response.status_code);
+    return "Error calling OpenAI: " + std::to_string(response.status_code) + " " + response.error;
 }
+std::string OpenAIClient::researchTopics(const std::string& transcription) { return "Research currently only supported for Gemini."; }
+
 std::unique_ptr<LLMClient> ClientFactory::createClient(const std::string& provider, const std::string& apiKeyOrUrl, const std::string& model) {
     if (provider == "ollama") return std::make_unique<OllamaClient>(model, apiKeyOrUrl.empty() ? "http://localhost:11434" : apiKeyOrUrl);
-    else if (provider == "gemini") return std::make_unique<GeminiClient>(apiKeyOrUrl, model);
-    else if (provider == "openai") return std::make_unique<OpenAIClient>(apiKeyOrUrl, model);
+    else if (provider == "gemini") {
+        // Use 1.5-flash as the most widely available stable default if none provided
+        return std::make_unique<GeminiClient>(apiKeyOrUrl, model.empty() ? "gemini-1.5-flash" : model);
+    }
+    else if (provider == "openai") return std::make_unique<OpenAIClient>(apiKeyOrUrl, model.empty() ? "gpt-3.5-turbo" : model);
     return nullptr;
 }

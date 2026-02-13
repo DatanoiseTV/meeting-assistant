@@ -6,6 +6,7 @@
 #include <ftxui/component/event.hpp>
 #include <thread>
 #include <chrono>
+#include <iomanip>
 
 using namespace ftxui;
 
@@ -16,13 +17,14 @@ bool TerminalUI::new_meeting_requested = false;
 std::string TerminalUI::current_status = "Initializing";
 float TerminalUI::current_rms = 0.0f;
 float TerminalUI::current_threshold = 0.01f;
+int TerminalUI::current_progress = 0;
 std::vector<std::pair<std::string, std::string>> TerminalUI::segments;
 std::mutex TerminalUI::data_mutex;
+std::chrono::steady_clock::time_point TerminalUI::start_proc_time;
 
 void TerminalUI::init() {
     running = true;
     finish_requested = false;
-    new_meeting_requested = false;
 }
 
 void TerminalUI::setEnabled(bool e) { enabled = e; }
@@ -34,12 +36,21 @@ void TerminalUI::resetNewMeetingRequest() { new_meeting_requested = false; }
 void TerminalUI::setStatus(const std::string& status) {
     std::lock_guard<std::mutex> lock(data_mutex);
     current_status = status;
+    if (status == "Processing...") {
+        start_proc_time = std::chrono::steady_clock::now();
+        current_progress = 0;
+    }
 }
 
 void TerminalUI::updateLevel(float rms, float threshold) {
     std::lock_guard<std::mutex> lock(data_mutex);
     current_rms = rms;
     current_threshold = threshold;
+}
+
+void TerminalUI::updateProgress(int progress) {
+    std::lock_guard<std::mutex> lock(data_mutex);
+    current_progress = progress;
 }
 
 void TerminalUI::addSegment(const std::string& timestamp, const std::string& text) {
@@ -63,35 +74,56 @@ void TerminalUI::loop() {
     auto screen = ScreenInteractive::Fullscreen();
     int frame_count = 0;
 
-    auto renderer = Renderer([&] {
+    auto renderer_func = [&] {
         std::lock_guard<std::mutex> lock(data_mutex);
         frame_count++;
         
         bool blink_on = (frame_count / 5) % 2 == 0;
-        Element record_icon = text("");
-        if (current_status == "Recording") {
-            record_icon = text(blink_on ? " ● " : "   ") | color(Color::Red) | bold;
-        }
+        Element record_icon = (current_status == "Recording") ? text(blink_on ? " ● " : "   ") | color(Color::Red) | bold : text("   ");
 
-        // Status Bar
-        Element status_color = (current_status == "Recording") ? text(current_status) | color(Color::Green) : text(current_status) | color(Color::Yellow);
+        // Status Line
         Element status_line = hbox({
             record_icon,
             text(" Status: ") | bold,
-            status_color,
+            text(current_status) | color(current_status == "Recording" ? Color::Green : Color::Yellow),
             filler(),
             text(" Meeting Assistant ") | color(Color::BlueLight)
         });
         
-        // Meter
-        float gauge_val = std::min(1.0f, current_rms * 15.0f);
-        Element meter = hbox({
-            text(" Mic Level: [") | bold,
-            gauge(gauge_val) | flex | color(current_rms > current_threshold ? Color::Green : Color::Blue),
-            text("] ")
-        });
+        // Processing Info (Progress, ETA)
+        Element proc_panel = text("");
+        if (current_status == "Processing...") {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_proc_time).count();
+            std::string eta = "Calculating...";
+            if (current_progress > 5) {
+                int total_est = (int)((float)elapsed / (current_progress / 100.0f));
+                int remaining = total_est - (int)elapsed;
+                eta = std::to_string(std::max(0, remaining)) + "s";
+            }
 
-        // Transcription History
+            proc_panel = vbox({
+                hbox({
+                    text(" Progress: "), gauge(current_progress / 100.0f) | flex,
+                    text(" " + std::to_string(current_progress) + "% ")
+                }) | color(Color::Cyan),
+                hbox({
+                    text(" Elapsed: " + std::to_string(elapsed) + "s"),
+                    filler(),
+                    text(" ETA: " + eta)
+                }) | dim
+            }) | border;
+        } else {
+            // Live level meter
+            float gauge_val = std::min(1.0f, current_rms * 15.0f);
+            proc_panel = hbox({
+                text(" Mic Level: [") | bold,
+                gauge(gauge_val) | flex | color(current_rms > current_threshold ? Color::Green : Color::Blue),
+                text("] ")
+            }) | border;
+        }
+
+        // History
         Elements trans_elements;
         trans_elements.push_back(filler());
         if (segments.empty()) {
@@ -106,26 +138,22 @@ void TerminalUI::loop() {
             }
         }
 
-        auto trans_window = window(text(" Live Transcription ") | bold, 
-                                   vbox(std::move(trans_elements)) | frame | flex);
-
-        auto footer = hbox({
-            text(" [N] New Meeting ") | bgcolor(Color::Blue) | color(Color::White),
-            text("  "),
-            text(" [Q/ESC] End & Summarize ") | inverted,
-            filler(),
-            text(" Thr: " + std::to_string((int)(current_threshold * 1000))) | dim
-        });
-
         return vbox({
             status_line | border,
-            meter | border,
-            trans_window | flex,
-            footer
+            proc_panel,
+            window(text(" Live Transcription ") | bold, vbox(std::move(trans_elements)) | frame | flex),
+            hbox({
+                text(" [N] New Meeting ") | bgcolor(Color::Blue) | color(Color::White),
+                text("  "),
+                text(" [Q/ESC] End & Summarize ") | inverted,
+                filler()
+            })
         });
-    });
+    };
 
-    auto component = CatchEvent(renderer, [&](Event event) {
+    auto component = Renderer(renderer_func);
+
+    auto event_handler = CatchEvent(component, [&](Event event) {
         if (event == Event::Character('q') || event == Event::Character('Q') || event == Event::Escape) {
             finish_requested = true;
             return true;
@@ -146,6 +174,6 @@ void TerminalUI::loop() {
         screen.ExitLoopClosure()();
     });
 
-    screen.Loop(component);
+    screen.Loop(event_handler);
     if (refresh_thread.joinable()) refresh_thread.join();
 }

@@ -13,6 +13,7 @@ public:
         std::string mode = "standard";
         std::string obsidian_vault_path;
         std::string persona = "general";
+        bool research = false;
         float vad_threshold = 0.01f;
         int vad_silence_ms = 1000;
     };
