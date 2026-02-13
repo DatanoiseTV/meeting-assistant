@@ -4,34 +4,57 @@
 
 # Meeting Assistant
 
-Meeting Assistant is a high-performance terminal application that transforms spoken conversations into structured knowledge. It combines real-time transcription with deep AI analysis to generate professional reports, visual mind maps, and actionable insights tailored to your specific professional role.
+Meeting Assistant is a high-performance terminal application that transforms spoken conversations into structured, actionable knowledge. It combines real-time local transcription with deep AI analysis to generate professional reports, visual mind maps, and insights tailored to your specific professional role.
 
-## Primary Workflow
+## Why Meeting Assistant?
 
-1.  **Capture**: Initialize a live microphone session or process an existing WAV file.
-2.  **Analysis**: AI automatically extracts participants, key decisions, and action items using specialized role-based personas.
-3.  **Deliver**: High-quality reports are instantly generated in Markdown (for Obsidian) and standalone HTML (for sharing).
+Manual note-taking is a cognitive burden that distracts from active participation. Standard recording tools often result in "data graveyards" where information is captured but never utilized. Meeting Assistant solves this by:
+
+1.  **Eliminating Cognitive Load**: Focus entirely on the conversation while the AI handles the documentation.
+2.  **Role-Specific Filtering**: Different roles care about different details. A Developer needs code snippets; an Executive needs ROI. Specialized personas filter the noise.
+3.  **Local-First Privacy**: Using whisper.cpp, transcription happens entirely on your machine. Your raw audio never leaves your local environment.
+4.  **Instant Structure**: Converts hours of audio into a 30-second read with clear decisions and action items.
+
+---
+
+## Real-World Examples
+
+### 1. The Daily Standup (Persona: PM)
+Focus on identifying blockers and ensuring the timeline is on track.
+```bash
+# Start a session focused on deliverables and blockers
+meeting_assistant -l --ui -p gemini --persona pm
+```
+*   **Result**: A concise list of who is doing what, what is stopping them, and updated deadlines synced to your PM dashboard.
+
+### 2. Technical Architecture Review (Persona: Dev + Research)
+Focus on capturing complex logic and fact-checking external libraries.
+```bash
+# Capture technical details and research mentioned libraries/APIs
+meeting_assistant -l --ui -p gemini --persona dev --research
+```
+*   **Result**: A technical brief containing mentioned code patterns, architectural trade-offs, and grounded research on the third-party tools discussed.
+
+### 3. Executive Strategy Session (Persona: Exec)
+High-level summary for stakeholders who need the bottom line without the fluff.
+```bash
+# Generate a high-level ROI-focused summary
+meeting_assistant -f board_meeting.wav -p gemini --persona exec
+```
+*   **Result**: A professional HTML report ready to be emailed, focusing on strategic outcomes, budget impacts, and key decisions.
+
+---
 
 ## Core Capabilities
 
-### Real-Time Dashboard & Intelligence
-*   **Interactive TUI**: A modern terminal interface with live audio metering, a blinking recording indicator, and auto-scrolling transcripts.
-*   **Live AI Copilot**: Press [Space] during any meeting to ask the AI questions about the conversation so far (e.g., "What was the deadline just mentioned?").
-*   **Intelligent VAD**: Energy-based Voice Activity Detection ensures audio is processed in natural sentence blocks based on silence.
-*   **Continuous Sessions**: Press [N] to finalize one meeting and immediately start another without restarting the application.
+### Active Intelligence
+*   **Live AI Copilot**: Press [Space] during a meeting to query the AI about the current context. Useful for catching up if you joined late or missed a detail.
+*   **Contextual Continuity**: Whisper retains a rolling memory of the last 200 characters, ensuring that names and technical terms mentioned earlier remain accurate throughout the session.
+*   **Visual Mapping**: Every meeting generates a Mermaid.js diagram. This transforms linear speech into a non-linear knowledge graph, making it easier to see how decisions relate to one another.
 
-### Specialized AI Analysis
-*   **Role-Based Personas**: Tailor summaries with `--persona [dev|pm|exec]`.
-    *   **Dev**: Technical depth, architecture decisions, and code snippets.
-    *   **PM**: Deliverables, blockers, timelines, and accountability.
-    *   **Exec**: ROI, high-level strategic impact, and critical outcomes.
-*   **Web Grounding**: When using Gemini, enable `--research` for real-time web research on technical terms or companies mentioned.
-*   **Visual Mapping**: Automatic generation of Mermaid.js diagrams visualizing the relationships between topics and decisions.
-
-### Professional Output
-*   **Standalone HTML**: Tidy, beautifully styled, single-file HTML reports perfect for email distribution.
-*   **Deep Obsidian Support**: Generates notes with standard Properties, semantic callouts, and collapsible raw transcripts.
-*   **Auto-Email Drafts**: Creates a ready-to-send follow-up email text file for every session.
+### Seamless Integration
+*   **Obsidian v3**: Beyond simple text, notes use modern Obsidian Properties and semantic callouts. Your meetings become an integrated part of your second brain, not just a static file.
+*   **Standalone HTML**: Generates tidy, CSS-styled reports. These are perfect for teams that don't use Obsidian, allowing you to share high-quality summaries via email or Slack.
 
 ---
 
@@ -50,29 +73,13 @@ make
 sudo make install
 ```
 
----
-
-## Usage
-
-### Examples
-```bash
-# Start a live session with the TUI and Project Manager persona
-meeting_assistant -l --ui -p gemini -k YOUR_API_KEY --persona pm
-
-# Process a technical recording with web research enabled
-meeting_assistant -f technical_sync.wav -p gemini -k KEY --persona dev --research
-
-# Save defaults (e.g., Obsidian vault path and API key)
-meeting_assistant --mode obsidian --obsidian-vault-path ~/MyVault -p gemini -k KEY --save-config
-```
-
-### Dashboard Hotkeys
+## Dashboard Hotkeys
 *   **[Space]**: Open AI Copilot to ask a question during the meeting.
-*   **[N]**: Finalize current session and start a New Meeting.
-*   **[Q / ESC]**: Save all reports and Quit the application.
+*   **[N]**: Finalize current session and start a New Meeting immediately.
+*   **[Q / ESC]**: Save all reports and Quit.
 
 ## Configuration
-Settings are persisted in `~/.meeting_assistant/config.json`. This includes API keys, preferred models, and default output paths. Use the `--save-config` flag to update these via the command line.
+Settings are persisted in `~/.meeting_assistant/config.json`. Update your default vault path or API keys using the `--save-config` flag.
 
 ## License
 MIT
