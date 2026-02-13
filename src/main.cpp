@@ -19,6 +19,10 @@
 #include "Config.h"
 #include "TerminalUI.h"
 
+#ifdef __APPLE__
+#include "MacTrayApp.h"
+#endif
+
 namespace fs = std::filesystem;
 volatile sig_atomic_t shutdown_requested = 0;
 void signal_handler(int s) { 
@@ -101,11 +105,12 @@ std::string md_to_html(const std::string& md) {
 
 void print_usage(const char* prog) {
     std::cout << "Meeting Assistant - Audio Transcription & AI Analysis\n\n";
-    std::cout << "Usage: " << prog << " [-f <input.wav> | -l] [options]\n\n";
+    std::cout << "Usage: " << prog << " [-f <input.wav> | -l | --tray] [options]\n\n";
     std::cout << "Options:\n";
     std::cout << "  -f, --file <path>      Input WAV file.\n";
     std::cout << "  -l, --live             Live transcription mode.\n";
     std::cout << "  --ui                   Show TUI dashboard (requires -l).\n";
+    std::cout << "  --tray                 Start as macOS Tray Application.\n";
     std::cout << "  --persona <p>          'general', 'dev', 'pm', 'exec'.\n";
     std::cout << "  --research             Enable AI grounding (Gemini only).\n";
     std::cout << "  -p <provider>          LLM Provider: ollama, gemini, openai.\n";
@@ -151,7 +156,7 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     std::string title = ext(master, "---TITLE---"); tsec(title);
     std::string topic = ext(master, "---TOPIC---"); tsec(topic);
     std::string ys = ext(master, "---YAML_SUMMARY---"); tsec(ys);
-    std::string os = ext(master, "---OVERVIEW_SUMMARY---"); tsec(os);
+    std::string real_os = ext(master, "---OVERVIEW_SUMMARY---"); tsec(real_os);
     std::string kt = ext(master, "---KEY_TAKEAWAYS---"); tsec(kt);
     std::string ai = ext(master, "---AGENDA_ITEMS---"); tsec(ai);
     std::string dp = ext(master, "---DISCUSSION_POINTS---"); tsec(dp);
@@ -177,13 +182,13 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     // 1. Markdown
     std::stringstream note;
     note << "---\ndate: " << date_ss.str() << "\ntype: meeting\ntopic: " << topic << "\nparticipants: [" << p << "]\ntags: [" << t << "]\nsummary: " << ys << "\n---\n\n";
-    note << "Status:: #processed\n\n> [!ABSTRACT] Summary\n> " << os << "\n\n> [!IMPORTANT] Takeaways\n" << kt << "\n\n";
+    note << "Status:: #processed\n\n> [!ABSTRACT] Summary\n> " << real_os << "\n\n> [!IMPORTANT] Takeaways\n" << kt << "\n\n";
     if (!research.empty()) note << "> [!INFO] Research\n" << research << "\n\n";
     if (!graph.empty() && graph.length() > 10) note << "## Map\n```mermaid\n" << graph << "\n```\n\n";
     note << "## Meeting Details\n\n### Agenda\n" << ai << "\n\n### Discussion\n" << dp << "\n\n### Questions\n" << qa << "\n\n## Outcomes\n\n### Decisions\n" << dm << "\n\n### Action Items\n" << acts << "\n\n## Appendix\n<details><summary>Transcript</summary>\n\n```\n" << transcription << "\n```\n</details>\n";
     std::ofstream(finalOutputDir + "/" + fBase + ".md") << note.str();
 
-    // 2. HTML (Sleek Corporate Design with Premium Fonts)
+    // 2. HTML Output (Masterclass Design)
     std::stringstream html;
     html << "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>" << title << "</title>"
          << "<link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
@@ -213,7 +218,7 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
          << "<a href='#outcomes' class='nav-link'>Outcomes</a><a href='#transcript' class='nav-link'>Transcription</a></aside>"
          << "<main><section id='summary'><h1>" << title << "</h1>"
          << "<div class='meta-bar'><span>Date: " << date_ss.str() << "</span><span>Participants: " << p << "</span><span style='margin-left:auto'>Persona: <strong>" << config.persona << "</strong></span></div>"
-         << "<div class='callout abstract'><h2>Summary</h2><p>" << os << "</p></div>"
+         << "<div class='callout abstract'><h2>Summary</h2><p>" << real_os << "</p></div>"
          << "<div class='callout important'><h2>Key Takeaways</h2>" << md_to_html(kt) << "</div>";
     
     if (!research.empty()) html << "<div class='callout info'><h2>AI Research & Context</h2>" << md_to_html(research) << "</div>";
@@ -235,13 +240,14 @@ int main(int argc, char** argv) {
     std::signal(SIGINT, signal_handler);
     Config::Data config = Config::load();
     std::string wavPath;
-    bool liveAudio = false, saveConfig = false, showUI = false;
+    bool liveAudio = false, saveConfig = false, showUI = false, useTray = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if ((arg == "-f" || arg == "--file") && i + 1 < argc) wavPath = argv[++i];
         else if (arg == "-l" || arg == "--live") liveAudio = true;
         else if (arg == "--ui") showUI = true;
+        else if (arg == "--tray") useTray = true;
         else if (arg == "--research") config.research = true;
         else if (arg == "-m" && i + 1 < argc) config.model_path = argv[++i];
         else if (arg == "-p" && i + 1 < argc) config.provider = argv[++i];
@@ -258,6 +264,15 @@ int main(int argc, char** argv) {
     }
 
     if (saveConfig) { Config::save(config); return 0; }
+
+#ifdef __APPLE__
+    if (useTray) {
+        MacTrayApp app;
+        app.run();
+        return 0;
+    }
+#endif
+
     if (wavPath.empty() && !liveAudio) { print_usage(argv[0]); return 1; }
 
     Transcriber transcriber(config.model_path);
@@ -373,7 +388,7 @@ int main(int argc, char** argv) {
             std::cout << "] " << p << "% | " << elapsed << "s";
             if (p > 5) {
                 int eta = (int)((float)elapsed / (p / 100.0f)) - (int)elapsed;
-                std::cout << " | ETA: " << std::max(0, (int)eta) << "s";
+                std::cout << " | ETA: " << std::max(0, eta) << "s";
             }
             std::cout << std::flush;
         });

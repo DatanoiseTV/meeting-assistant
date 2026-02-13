@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(MeetingAssistant CXX)
+project(MeetingAssistant CXX OBJCXX) # Added OBJCXX
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,7 +37,7 @@ FetchContent_MakeAvailable(ftxui)
 find_package(CURL REQUIRED)
 
 # Source files
-file(GLOB_RECURSE SOURCES "src/*.cpp")
+file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.mm") # Added .mm
 
 # Executable
 add_executable(meeting_assistant ${SOURCES})
@@ -45,9 +45,9 @@ add_executable(meeting_assistant ${SOURCES})
 # Include directories
 target_include_directories(meeting_assistant PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${whisper_SOURCE_DIR} # To include whisper.h
+    ${whisper_SOURCE_DIR}
     ${json_SOURCE_DIR}/include
-    /opt/homebrew/include # PortAudio include
+    /opt/homebrew/include
 )
 
 # Link directories for PortAudio
@@ -61,8 +61,15 @@ target_link_libraries(meeting_assistant PRIVATE
     ftxui::dom
     ftxui::component
     CURL::libcurl
-    /opt/homebrew/lib/libportaudio.dylib # PortAudio library
+    /opt/homebrew/lib/libportaudio.dylib
 )
+
+# Native macOS Frameworks
+if(APPLE)
+    find_library(COCOA_LIBRARY Cocoa)
+    find_library(APPKIT_LIBRARY AppKit)
+    target_link_libraries(meeting_assistant PRIVATE ${COCOA_LIBRARY} ${APPKIT_LIBRARY})
+endif()
 
 # Copy models folder to build directory
 add_custom_command(TARGET meeting_assistant POST_BUILD
