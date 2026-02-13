@@ -1,0 +1,24 @@
+# Binaries
+build/
+meeting_assistant
+
+# Models
+models/*.bin
+models/*.pt
+ggml-small.en.bin
+
+# Output
+output/
+*.wav
+
+# Dependencies downloaded by FetchContent
+_deps/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS specific
+.DS_Store
+*.swp
+*~
