@@ -151,13 +151,13 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     std::string title = ext(master, "---TITLE---"); tsec(title);
     std::string topic = ext(master, "---TOPIC---"); tsec(topic);
     std::string ys = ext(master, "---YAML_SUMMARY---"); tsec(ys);
-    std::string os = ext(master, "---OVERVIEW_SUMMARY---"); tsec(os);
+    std::string real_os = ext(master, "---OVERVIEW_SUMMARY---"); tsec(real_os);
     std::string kt = ext(master, "---KEY_TAKEAWAYS---"); tsec(kt);
     std::string ai = ext(master, "---AGENDA_ITEMS---"); tsec(ai);
     std::string dp = ext(master, "---DISCUSSION_POINTS---"); tsec(dp);
     std::string dm = ext(master, "---DECISIONS_MADE---"); tsec(dm);
     std::string qa = ext(master, "---QUESTIONS_ARISEN---"); tsec(qa);
-    std::string real_acts = ext(master, "---ACTION_ITEMS---"); tsec(real_acts);
+    std::string acts = ext(master, "---ACTION_ITEMS---"); tsec(acts);
     std::string graph = ext(master, "---MERMAID_GRAPH---"); tsec(graph);
     std::string email = ext(master, "---EMAIL_DRAFT---"); tsec(email);
 
@@ -177,13 +177,13 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     // 1. Markdown
     std::stringstream note;
     note << "---\ndate: " << date_ss.str() << "\ntype: meeting\ntopic: " << topic << "\nparticipants: [" << p << "]\ntags: [" << t << "]\nsummary: " << ys << "\n---\n\n";
-    note << "Status:: #processed\n\n> [!ABSTRACT] Summary\n> " << os << "\n\n> [!IMPORTANT] Takeaways\n" << kt << "\n\n";
+    note << "Status:: #processed\n\n> [!ABSTRACT] Summary\n> " << real_os << "\n\n> [!IMPORTANT] Takeaways\n" << kt << "\n\n";
     if (!research.empty()) note << "> [!INFO] Research\n" << research << "\n\n";
     if (!graph.empty() && graph.length() > 10) note << "## Map\n```mermaid\n" << graph << "\n```\n\n";
-    note << "## Meeting Details\n\n### Agenda\n" << ai << "\n\n### Discussion\n" << dp << "\n\n### Questions\n" << qa << "\n\n## Outcomes\n\n### Decisions\n" << dm << "\n\n### Action Items\n" << real_acts << "\n\n## Appendix\n<details><summary>Transcript</summary>\n\n```\n" << transcription << "\n```\n</details>\n";
+    note << "## Meeting Details\n\n### Agenda\n" << ai << "\n\n### Discussion\n" << dp << "\n\n### Questions\n" << qa << "\n\n## Outcomes\n\n### Decisions\n" << dm << "\n\n### Action Items\n" << acts << "\n\n## Appendix\n<details><summary>Transcript</summary>\n\n```\n" << transcription << "\n```\n</details>\n";
     std::ofstream(finalOutputDir + "/" + fBase + ".md") << note.str();
 
-    // 2. HTML (Sleek Corporate Design with Premium Fonts)
+    // 2. HTML (Sleek Corporate Design with Premium Fonts, No Emojis)
     std::stringstream html;
     html << "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>" << title << "</title>"
          << "<link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
@@ -212,8 +212,8 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
          << "<div class='section-header'>Output</div>"
          << "<a href='#outcomes' class='nav-link'>Outcomes</a><a href='#transcript' class='nav-link'>Transcription</a></aside>"
          << "<main><section id='summary'><h1>" << title << "</h1>"
-         << "<div class='meta-bar'><span>🗓️ " << date_ss.str() << "</span><span>👥 " << p << "</span><span style='margin-left:auto'>Persona: <strong>" << config.persona << "</strong></span></div>"
-         << "<div class='callout abstract'><h2>Summary</h2><p>" << os << "</p></div>"
+         << "<div class='meta-bar'><span>Date: " << date_ss.str() << "</span><span>Participants: " << p << "</span><span style='margin-left:auto'>Persona: <strong>" << config.persona << "</strong></span></div>"
+         << "<div class='callout abstract'><h2>Summary</h2><p>" << real_os << "</p></div>"
          << "<div class='callout important'><h2>Key Takeaways</h2>" << md_to_html(kt) << "</div>";
     
     if (!research.empty()) html << "<div class='callout info'><h2>AI Research & Context</h2>" << md_to_html(research) << "</div>";
@@ -221,14 +221,14 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     html << "</section><section id='details' class='card'><h2>Meeting Details</h2><h3>Agenda</h3>" << md_to_html(ai) << "<h3>Discussion Points</h3>" << md_to_html(dp);
     if (!qa.empty()) html << "<h3>Questions Arisen</h3>" << md_to_html(qa);
     
-    html << "</section><section id='outcomes' class='card'><h2>Outcomes & Actions</h2><h3>Decisions</h3>" << md_to_html(dm) << "<h3>Action Items</h3>" << md_to_html(real_acts) << "</section>";
+    html << "</section><section id='outcomes' class='card'><h2>Outcomes & Actions</h2><h3>Decisions</h3>" << md_to_html(dm) << "<h3>Action Items</h3>" << md_to_html(acts) << "</section>";
     
     html << "<section id='transcript' class='card'><h2>Raw Transcript</h2><details><summary>Expand full transcription log</summary><pre style='margin-top:20px'>" << transcription << "</pre></details></section></main></body></html>";
     
     std::ofstream(finalOutputDir + "/" + fBase + ".html") << html.str();
     
     if (!email.empty()) std::ofstream(finalOutputDir + "/" + fBase + "_email.txt") << email;
-    std::cout << "[Success] Amazing reports generated: " << fBase << "\n";
+    std::cout << "[Success] Sleek professional reports generated: " << fBase << "\n";
 }
 
 int main(int argc, char** argv) {
