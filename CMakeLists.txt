@@ -25,7 +25,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# 3. libcurl (System)
+# 3. FTXUI
+FetchContent_Declare(
+    ftxui
+    GIT_REPOSITORY https://github.com/ArthurSonzogni/ftxui
+    GIT_TAG        v5.0.0
+)
+FetchContent_MakeAvailable(ftxui)
+
+# 4. libcurl (System)
 find_package(CURL REQUIRED)
 
 # Source files
@@ -49,6 +57,9 @@ link_directories(/opt/homebrew/lib)
 target_link_libraries(meeting_assistant PRIVATE 
     whisper
     nlohmann_json::nlohmann_json
+    ftxui::screen
+    ftxui::dom
+    ftxui::component
     CURL::libcurl
     /opt/homebrew/lib/libportaudio.dylib # PortAudio library
 )

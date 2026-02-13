@@ -7,7 +7,7 @@ class Transcriber {
 public:
     Transcriber(const std::string& modelPath);
     ~Transcriber();
-    std::vector<TranscriptionSegment> transcribe(const std::vector<float>& pcmf32, int n_threads = 4);
+    std::vector<TranscriptionSegment> transcribe(const std::vector<float>& pcmf32, int n_threads = 4, const std::string& initial_prompt = "");
 private:
     struct whisper_context* ctx = nullptr;
 };

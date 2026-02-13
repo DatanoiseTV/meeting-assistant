@@ -1,104 +1,57 @@
-# Meeting Assistant
+# Meeting Assistant Pro
 
-A C++ command-line application for transcribing audio and generating LLM-powered summaries, with specialized output for Obsidian.
+A high-performance C++ terminal application for real-time audio transcription and LLM-powered meeting summarization, featuring a modern TUI dashboard and deep Obsidian integration.
 
 ## Features
 
-*   **Audio Transcription:** Transcribes audio from:
-    *   Live microphone input (using PortAudio).
-    *   WAV files (supports various sample rates, bit depths, and channel counts, automatically converting to 16kHz mono float for Whisper.cpp).
-*   **Voice Activity Detection (VAD):** In live mode, the assistant intelligently detects pauses in speech (silence) to process audio in natural chunks, rather than fixed time intervals.
-*   **Persistent Configuration:** Saves your settings (API keys, paths, models) to `~/.meeting_assistant/config.json`, so you don't have to type them every time.
-*   **Speech Recognition:** Utilizes `ggerganov/whisper.cpp` for high-performance, local speech-to-text transcription.
-*   **Speaker Turn Detection:** Attempts to identify speaker changes in the transcription.
-*   **LLM-Powered Summarization:** Generates structured meeting summaries using various Large Language Model APIs:
-    *   Ollama (for local models like Llama3).
-    *   Gemini API.
-    *   OpenAI compatible APIs.
-*   **Obsidian Integration:** A dedicated `--mode obsidian` to generate highly structured Markdown notes tailored for Obsidian, featuring:
-    *   Dynamically generated YAML frontmatter.
-    *   Obsidian Callouts for meeting overview.
-    *   Structured sections for Key Discussion Points, Decisions Made, and Action Items.
-    *   Extensive use of `[[wikilinks]]` and `#tags`.
-*   **Customizable Filenames:** Obsidian notes are named based on an LLM-generated title and the current date.
-*   **Graceful Shutdown:** Handles `Ctrl+C` for proper saving of in-progress transcriptions and summaries.
+*   **Interactive TUI Dashboard:** A modern terminal interface powered by `FTXUI` featuring:
+    *   **Live Waveform Meter:** Real-time RMS energy gauge for microphone monitoring.
+    *   **Blinking Record Indicator:** Visual red "recording" icon (●).
+    *   **Auto-Scrolling Transcript:** Live view of the conversation as it happens.
+    *   **Keyboard Control:** Hotkeys for ending meetings or starting new sessions.
+*   **Continuous Meeting Workflow:** Start a new meeting instantly with `[N]` without restarting the application. Summaries are automatically generated and saved between sessions.
+*   **Intelligent Audio Processing:**
+    *   **Voice Activity Detection (VAD):** Processes audio in natural sentence chunks based on silence detection.
+    *   **Context-Aware Transcription:** Whisper uses the last ~200 characters of conversation context to maintain accuracy and sentence flow.
+    *   **Robust WAV Support:** Supports arbitrary sample rates, bit depths, and multi-channel downmixing.
+*   **LLM-Powered Summarization:**
+    *   **Multi-Provider:** Supports Ollama (local), Gemini, and OpenAI.
+    *   **Obsidian Mode:** Generates highly structured Markdown notes with YAML frontmatter, callouts, wikilinks, and dedicated sections for Agenda, Decisions, and Action Items.
+*   **Persistent Configuration:** Saves settings to `~/.meeting_assistant/config.json`.
 
 ## Getting Started
 
 ### Prerequisites
 
-*   **CMake:** Version 3.14 or higher.
-*   **C++ Compiler:** C++17 compatible.
-*   **PortAudio:** Required for live audio input.
-    *   **macOS (Homebrew):** `brew install portaudio`
-*   **Git:** For cloning the repository.
+*   **CMake:** 3.14+
+*   **PortAudio:** `brew install portaudio` (macOS)
+*   **Whisper Model:** Download a `ggml` model from HuggingFace.
 
 ### Build & Install
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/DatanoiseTV/meeting-assistant.git
-    cd meeting-assistant
-    ```
-
-2.  **Configure and build:**
-    ```bash
-    mkdir build
-    cd build
-    cmake -DCMAKE_PREFIX_PATH=/opt/homebrew .. # Adjust for your PortAudio path
-    make
-    ```
-
-3.  **Install (Optional):**
-    ```bash
-    sudo make install
-    ```
-
-### Download Whisper Model
-
 ```bash
-mkdir -p models
-curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin -o models/ggml-base.en.bin
-```
-
-## Configuration
-
-The application uses a configuration file located at `~/.meeting_assistant/config.json`.
-You can set your defaults here so you don't have to pass arguments every time.
-
-To save your current command-line arguments as the default configuration:
-```bash
-./build/meeting_assistant --mode obsidian --obsidian-vault-path /path/to/vault -p ollama -L llama3 --save-config
-```
-
-Example `config.json`:
-```json
-{
-    "api_key": "",
-    "llm_model": "llama3",
-    "mode": "obsidian",
-    "model_path": "models/ggml-base.en.bin",
-    "obsidian_vault_path": "/Users/you/Documents/Obsidian/Vault",
-    "output_dir": "output",
-    "provider": "ollama",
-    "vad_silence_ms": 1000,
-    "vad_threshold": 0.01
-}
+mkdir build && cd build
+cmake -DCMAKE_PREFIX_PATH=/opt/homebrew ..
+make
+sudo make install
 ```
 
 ## Usage
 
 ```bash
-meeting_assistant [OPTIONS]
+# Start live dashboard (Recommended)
+meeting_assistant -l --ui
+
+# Transcribe a file using Gemini
+meeting_assistant -f meeting.wav -p gemini -k YOUR_KEY
+
+# Save defaults
+meeting_assistant --mode obsidian --obsidian-vault-path ~/MyVault -p ollama --save-config
 ```
 
-*   `-f <input.wav>`: Input WAV file.
-*   `-l`: Enable live audio transcription.
-*   `--save-config`: Save provided arguments to the config file and exit.
-*   `--vad-threshold <float>`: RMS energy threshold for silence (default 0.01).
-
-(See `README.md` source for full options list).
+### Keyboard Shortcuts (UI Mode)
+*   `[N]`: Finish current meeting, save summary, and start a **New Meeting**.
+*   `[Q / ESC]`: End meeting, save summary, and **Quit**.
 
 ## License
-
 MIT
