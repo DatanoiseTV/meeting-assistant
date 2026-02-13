@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" width="200" alt="Meeting Assistant Logo">
+</p>
+
 # Meeting Assistant
 
 A high-performance C++ terminal application for real-time audio transcription and intelligent AI-powered analysis. It transforms your meetings into structured knowledge bases with Obsidian support and professional HTML reports.
