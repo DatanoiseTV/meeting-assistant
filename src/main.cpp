@@ -11,10 +11,12 @@
 #include <cctype>
 #include <iomanip>
 #include <cstring>
+#include <cmath>
 
 #include "Transcriber.h"
 #include "LLMClients.h"
 #include "AudioCapture.h"
+#include "Config.h"
 
 namespace fs = std::filesystem;
 volatile sig_atomic_t shutdown_requested = 0;
@@ -25,44 +27,96 @@ void trim(std::string& s) {
     s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
 }
 
+float calculate_rms(const std::vector<float>& samples) {
+    if (samples.empty()) return 0.0f;
+    float sum_sq = 0.0f;
+    for (float s : samples) sum_sq += s * s;
+    return std::sqrt(sum_sq / samples.size());
+}
+
+void print_usage(const char* prog) {
+    std::cout << "Meeting Assistant - Audio Transcription & LLM Summarization\n\n";
+    std::cout << "Usage: " << prog << " [-f <input.wav> | -l] [options]\n\n";
+    std::cout << "Core Options:\n";
+    std::cout << "  -f <path>              Path to input WAV file for transcription.\n";
+    std::cout << "  -l                     Enable live audio transcription from default microphone.\n";
+    std::cout << "  -m <path>              Path to Whisper model (default: models/ggml-base.en.bin).\n";
+    std::cout << "  -o <path>              Output directory for transcripts/summaries (default: output).\n\n";
+    std::cout << "LLM Summarization Options:\n";
+    std::cout << "  -p <provider>          LLM Provider: 'ollama', 'gemini', or 'openai'.\n";
+    std::cout << "  -k <api_key>           API Key for the provider (or base URL for Ollama).\n";
+    std::cout << "  -L <model_name>        Specific LLM model to use (e.g., 'llama3', 'gemini-pro').\n";
+    std::cout << "  --mode <mode>          Output mode: 'standard' (Markdown) or 'obsidian' (Structured).\n";
+    std::cout << "  --obsidian-vault-path <p> Path to your Obsidian vault (required for obsidian mode).\n\n";
+    std::cout << "Configuration & Advanced:\n";
+    std::cout << "  --save-config          Save all provided arguments to ~/.meeting_assistant/config.json and exit.\n";
+    std::cout << "  --vad-threshold <f>    RMS energy threshold for silence detection (default: 0.01).\n";
+    std::cout << "  --help, -h             Show this help message.\n\n";
+    std::cout << "Examples:\n";
+    std::cout << "  1. Live transcription with Obsidian notes (Ollama):\n";
+    std::cout << "     " << prog << " -l --mode obsidian --obsidian-vault-path ~/MyNotes -p ollama\n\n";
+    std::cout << "  2. Transcribe a file using Gemini API:\n";
+    std::cout << "     " << prog << " -f meeting.wav -p gemini -k YOUR_API_KEY\n\n";
+    std::cout << "  3. Save default settings for future runs:\n";
+    std::cout << "     " << prog << " -p openai -k YOUR_KEY -L gpt-4 --mode obsidian --save-config\n";
+}
+
 int main(int argc, char** argv) {
     std::signal(SIGINT, signal_handler);
-    std::string wavPath, modelPath = "models/ggml-base.en.bin", provider, apiKey, llmModel, outputDir = "output", mode = "standard", obsidianVaultPath;
+    Config::Data config = Config::load();
+    std::string wavPath;
     bool liveAudio = false;
+    bool saveConfig = false;
+
+    if (argc < 2) { print_usage(argv[0]); return 0; }
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "-f" && i + 1 < argc) wavPath = argv[++i];
         else if (arg == "-l") liveAudio = true;
-        else if (arg == "-m" && i + 1 < argc) modelPath = argv[++i];
-        else if (arg == "-p" && i + 1 < argc) provider = argv[++i];
-        else if (arg == "-k" && i + 1 < argc) apiKey = argv[++i];
-        else if (arg == "-L" && i + 1 < argc) llmModel = argv[++i];
-        else if (arg == "-o" && i + 1 < argc) outputDir = argv[++i];
-        else if (arg == "--mode" && i + 1 < argc) mode = argv[++i];
-        else if (arg == "--obsidian-vault-path" && i + 1 < argc) obsidianVaultPath = argv[++i];
+        else if (arg == "-m" && i + 1 < argc) config.model_path = argv[++i];
+        else if (arg == "-p" && i + 1 < argc) config.provider = argv[++i];
+        else if (arg == "-k" && i + 1 < argc) config.api_key = argv[++i];
+        else if (arg == "-L" && i + 1 < argc) config.llm_model = argv[++i];
+        else if (arg == "-o" && i + 1 < argc) config.output_dir = argv[++i];
+        else if (arg == "--mode" && i + 1 < argc) config.mode = argv[++i];
+        else if (arg == "--obsidian-vault-path" && i + 1 < argc) config.obsidian_vault_path = argv[++i];
+        else if (arg == "--vad-threshold" && i + 1 < argc) config.vad_threshold = std::stof(argv[++i]);
+        else if (arg == "--save-config") saveConfig = true;
+        else if (arg == "--help" || arg == "-h") { print_usage(argv[0]); return 0; }
     }
 
-    if (wavPath.empty() && !liveAudio) return 1;
-    Transcriber transcriber(modelPath);
+    if (saveConfig) { Config::save(config); return 0; }
+    if (wavPath.empty() && !liveAudio) { print_usage(argv[0]); return 1; }
+    if (config.mode == "obsidian" && config.obsidian_vault_path.empty()) { std::cerr << "Error: --obsidian-vault-path required.\n"; return 1; }
+
+    std::cout << "Loading Whisper model: " << config.model_path << std::endl;
+    Transcriber transcriber(config.model_path);
     std::vector<float> pcmf32_data; std::stringstream current_transcription_text; std::string baseName;
 
     if (liveAudio) {
         AudioCapture audioCapture; if (!audioCapture.startCapture()) return 1;
-        std::cout << "Starting live transcription. Press Ctrl+C to stop.\n";
+        std::cout << "Live transcription active. Pauses trigger processing. Ctrl+C to finish.\n";
+        float silence_ms = 0; const int chunk_ms = 100; const int chunk_samples = SAMPLE_RATE * chunk_ms / 1000;
         while (!shutdown_requested) {
-            std::vector<float> chunk; if (audioCapture.getAudioChunk(chunk, SAMPLE_RATE / 2)) {
+            std::vector<float> chunk;
+            if (audioCapture.getAudioChunk(chunk, chunk_samples)) {
                 pcmf32_data.insert(pcmf32_data.end(), chunk.begin(), chunk.end());
-                if (pcmf32_data.size() >= SAMPLE_RATE * 5 || (shutdown_requested && !pcmf32_data.empty())) {
-                    auto segments = transcriber.transcribe(pcmf32_data); pcmf32_data.clear();
-                    for (const auto& seg : segments) {
-                        int t0 = seg.t0 / 100, t1 = seg.t1 / 100; char b[64]; snprintf(b, sizeof(b), "[%02d:%02d - %02d:%02d]", t0 / 60, t0 % 60, t1 / 60, t1 % 60);
-                        current_transcription_text << "Speaker 1 " << b << ": " << seg.text << "\n";
-                        std::cout << "Speaker 1 " << b << ": " << seg.text << std::endl;
-                    }
+                if (calculate_rms(chunk) < config.vad_threshold) silence_ms += chunk_ms; else silence_ms = 0;
+                float buffer_sec = pcmf32_data.size() / (float)SAMPLE_RATE;
+                if ((silence_ms >= config.vad_silence_ms && buffer_sec > 2.0f) || buffer_sec >= 30.0f || (shutdown_requested && !pcmf32_data.empty())) {
+                    if (buffer_sec > 0.5f) {
+                        auto segments = transcriber.transcribe(pcmf32_data); pcmf32_data.clear(); silence_ms = 0;
+                        for (const auto& seg : segments) {
+                            int t0 = seg.t0 / 100; char buf[64]; snprintf(buf, sizeof(buf), "[%02d:%02d]", t0 / 60, t0 % 60);
+                            std::cout << buf << ": " << seg.text << std::endl;
+                            current_transcription_text << buf << ": " << seg.text << "\n";
+                        }
+                    } else pcmf32_data.clear();
                 }
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            } else std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
+        audioCapture.stopCapture();
         auto now = std::chrono::system_clock::now(); auto in_time_t = std::chrono::system_clock::to_time_t(now);
         std::stringstream ss; ss << std::put_time(std::localtime(&in_time_t), "%Y%m%d_%H%M%S"); baseName = "meeting_" + ss.str();
     } else {
@@ -94,49 +148,56 @@ int main(int argc, char** argv) {
         } else pcmf32_data = std::move(pcm_raw);
         auto segments = transcriber.transcribe(pcmf32_data);
         for (const auto& seg : segments) {
-            int t0 = seg.t0 / 100, t1 = seg.t1 / 100; char b[64]; snprintf(b, sizeof(b), "[%02d:%02d - %02d:%02d]", t0 / 60, t0 % 60, t1 / 60, t1 % 60);
-            current_transcription_text << "Speaker 1 " << b << ": " << seg.text << "\n";
+            int t0 = seg.t0 / 100; char b[64]; snprintf(b, sizeof(b), "[%02d:%02d]", t0 / 60, t0 % 60);
+            current_transcription_text << b << ": " << seg.text << "\n";
         }
         baseName = fs::path(wavPath).stem().string();
     }
 
     std::string transcription = current_transcription_text.str();
-    std::string finalOutputDir = (mode == "obsidian") ? obsidianVaultPath : outputDir;
+    if (transcription.empty()) return 0;
+    std::string finalOutputDir = (config.mode == "obsidian") ? config.obsidian_vault_path : config.output_dir;
     fs::create_directories(finalOutputDir);
     std::ofstream(finalOutputDir + "/" + baseName + "_transcript.md") << transcription;
 
-    if (!provider.empty()) {
-        if (llmModel.empty()) llmModel = (provider == "ollama") ? "llama3" : (provider == "gemini") ? "gemini-pro" : "gpt-3.5-turbo";
-        auto client = ClientFactory::createClient(provider, apiKey, llmModel);
+    if (!config.provider.empty()) {
+        auto client = ClientFactory::createClient(config.provider, config.api_key, config.llm_model);
         if (client) {
-            if (mode == "obsidian") {
+            std::cout << "\nGenerating Summary via " << config.provider << "...\n";
+            if (config.mode == "obsidian") {
                 std::string title = client->generateSummary(TITLE_PROMPT + transcription); trim(title);
                 std::string master = client->generateSummary(OBSIDIAN_MASTER_PROMPT + transcription);
                 auto ext = [&](const std::string& c, const std::string& s, const std::string& e) {
                     size_t st = c.find(s); if (st == std::string::npos) return std::string();
                     st += s.length(); size_t en = c.find(e, st); return c.substr(st, (en == std::string::npos) ? std::string::npos : en - st);
                 };
-                std::string p = ext(master, "---PARTICIPANTS---", "---TAGS---"); trim(p);
-                std::string t = ext(master, "---TAGS---", "---YAML_SUMMARY---"); trim(t);
-                std::string ys = ext(master, "---YAML_SUMMARY---", "---OVERVIEW_SUMMARY---"); trim(ys);
-                std::string os = ext(master, "---OVERVIEW_SUMMARY---", "---AGENDA_ITEMS---"); trim(os);
-                std::string ai = ext(master, "---AGENDA_ITEMS---", "---DISCUSSION_POINTS---"); trim(ai);
-                std::string dp = ext(master, "---DISCUSSION_POINTS---", "---DECISIONS_MADE---"); trim(dp);
-                std::string dm = ext(master, "---DECISIONS_MADE---", "---ACTION_ITEMS---"); trim(dm);
-                std::string acts = ext(master, "---ACTION_ITEMS---", "Transcription:"); trim(acts);
-                
+                auto tsec = [](std::string& s) {
+                    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+                    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
+                };
+                std::string p = ext(master, "---PARTICIPANTS---", "---TAGS---"); tsec(p);
+                std::string t = ext(master, "---TAGS---", "---YAML_SUMMARY---"); tsec(t);
+                std::string ys = ext(master, "---YAML_SUMMARY---", "---OVERVIEW_SUMMARY---"); tsec(ys);
+                std::string os = ext(master, "---OVERVIEW_SUMMARY---", "---AGENDA_ITEMS---"); tsec(os);
+                std::string ai = ext(master, "---AGENDA_ITEMS---", "---DISCUSSION_POINTS---"); tsec(ai);
+                std::string dp = ext(master, "---DISCUSSION_POINTS---", "---DECISIONS_MADE---"); tsec(dp);
+                std::string dm = ext(master, "---DECISIONS_MADE---", "---ACTION_ITEMS---"); tsec(dm);
+                std::string acts = ext(master, "---ACTION_ITEMS---", "Transcription:"); tsec(acts);
+                if (title.empty()) title = "Meeting " + baseName;
                 std::string san = title; for (char& c : san) { if (c == ' ') c = '-'; else if (!std::isalnum(c) && c != '-') c = '_'; }
                 auto now = std::chrono::system_clock::now(); auto t_now = std::chrono::system_clock::to_time_t(now);
                 std::stringstream ss; ss << std::put_time(std::localtime(&t_now), "%Y-%m-%d");
                 std::string fBase = san + "-" + ss.str();
-                
                 std::stringstream note;
                 note << "---\ndate: " << ss.str() << "\ntitle: \"" << title << "\"\nparticipants: " << (p.empty() ? "[]" : p) << "\ntags: " << (t.empty() ? "[]" : t) << "\nsummary: " << ys << "\n---\n\n";
-                note << "> [!SUMMARY] Meeting Overview\n> " << os << "\n\n## Meeting Details\n\n### Agenda\n" << ai << "\n\n### Key Discussion Points\n" << dp << "\n\n## Decisions Made\n" << dm << "\n\n## Action Items\n" << acts << "\n\n## Raw Transcription\n```\n" << transcription << "\n```\n";
+                note << "> [!SUMMARY] Meeting Overview\n> " << os << "\n\n## Meeting Details\n\n### Agenda\n" << (ai.empty() ? "- N/A" : ai) << "\n\n";
+                note << "### Key Discussion Points\n" << (dp.empty() ? "- N/A" : dp) << "\n\n## Decisions Made\n" << (dm.empty() ? "- N/A" : dm) << "\n\n## Action Items\n" << (acts.empty() ? "- N/A" : acts) << "\n\n## Raw Transcription\n```\n" << transcription << "\n```\n";
                 std::ofstream(finalOutputDir + "/" + fBase + ".md") << note.str();
+                std::cout << "Obsidian note saved to: " << fBase << ".md\n";
             } else {
                 std::string sum = client->generateSummary(SUMMARY_PROMPT + transcription);
                 std::ofstream(finalOutputDir + "/" + baseName + "_summary.md") << "# Meeting Summary\n\n" << sum;
+                std::cout << "Summary saved.\n";
             }
         }
     }

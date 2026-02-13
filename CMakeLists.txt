@@ -59,3 +59,7 @@ add_custom_command(TARGET meeting_assistant POST_BUILD
     ${CMAKE_CURRENT_SOURCE_DIR}/models
     $<TARGET_FILE_DIR:meeting_assistant>/models
 )
+
+# Install
+install(TARGETS meeting_assistant DESTINATION bin)
+install(DIRECTORY models DESTINATION share/meeting_assistant)
