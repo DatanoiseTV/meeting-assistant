@@ -62,20 +62,21 @@ meeting_assistant -l --ui -p ollama -L llama3
 *   **PortAudio**: Required for live microphone input (`brew install portaudio` on macOS).
 
 ### 1. Download Whisper Model
-The application requires a Whisper model in `ggml` format. You can download these from the [whisper.cpp HuggingFace repository](https://huggingface.co/ggerganov/whisper.cpp/tree/main).
+The application requires a Whisper model in `ggml` format. Choose a model based on your hardware and accuracy needs:
 
 | Model | Size | Speed | Accuracy | Recommended For |
 | :--- | :--- | :--- | :--- | :--- |
-| **tiny.en** | 75 MB | Fastest | Lowest | Low-power devices / Real-time testing |
-| **base.en** | 142 MB | Very Fast | Good | Standard laptops / Most meetings |
-| **small.en**| 466 MB | Fast | Great | High-accuracy requirements |
-| **medium.en**| 1.5 GB | Slow | Excellent | Post-meeting batch processing |
-| **large-v3** | 2.9 GB | Slowest | State-of-the-art | Maximum precision (requires GPU/Metal) |
+| [**tiny.en**](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin) | 75 MB | Fastest | Lowest | Real-time testing / Low-power |
+| [**base.en**](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin) | 142 MB | Very Fast | Good | Standard laptops / Most meetings |
+| [**small.en**](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin) | 466 MB | Fast | Great | High-accuracy requirements |
+| [**medium.en**](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin) | 1.5 GB | Slow | Excellent | Post-meeting batch processing |
+| [**large-v3**](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin) | 2.9 GB | Slowest | State-of-the-art | Maximum precision (Requires GPU) |
 
-**Quick Download (Base Model):**
+**Using curl to download:**
 ```bash
 mkdir -p models
-curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin -o models/ggml-base.en.bin
+# Example: Downloading the 'small.en' model
+curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin -o models/ggml-small.en.bin
 ```
 
 ### 2. Build
