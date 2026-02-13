@@ -151,7 +151,7 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     std::string title = ext(master, "---TITLE---"); tsec(title);
     std::string topic = ext(master, "---TOPIC---"); tsec(topic);
     std::string ys = ext(master, "---YAML_SUMMARY---"); tsec(ys);
-    std::string real_os = ext(master, "---OVERVIEW_SUMMARY---"); tsec(real_os);
+    std::string os = ext(master, "---OVERVIEW_SUMMARY---"); tsec(os);
     std::string kt = ext(master, "---KEY_TAKEAWAYS---"); tsec(kt);
     std::string ai = ext(master, "---AGENDA_ITEMS---"); tsec(ai);
     std::string dp = ext(master, "---DISCUSSION_POINTS---"); tsec(dp);
@@ -177,13 +177,13 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     // 1. Markdown
     std::stringstream note;
     note << "---\ndate: " << date_ss.str() << "\ntype: meeting\ntopic: " << topic << "\nparticipants: [" << p << "]\ntags: [" << t << "]\nsummary: " << ys << "\n---\n\n";
-    note << "Status:: #processed\n\n> [!ABSTRACT] Summary\n> " << real_os << "\n\n> [!IMPORTANT] Takeaways\n" << kt << "\n\n";
+    note << "Status:: #processed\n\n> [!ABSTRACT] Summary\n> " << os << "\n\n> [!IMPORTANT] Takeaways\n" << kt << "\n\n";
     if (!research.empty()) note << "> [!INFO] Research\n" << research << "\n\n";
     if (!graph.empty() && graph.length() > 10) note << "## Map\n```mermaid\n" << graph << "\n```\n\n";
     note << "## Meeting Details\n\n### Agenda\n" << ai << "\n\n### Discussion\n" << dp << "\n\n### Questions\n" << qa << "\n\n## Outcomes\n\n### Decisions\n" << dm << "\n\n### Action Items\n" << acts << "\n\n## Appendix\n<details><summary>Transcript</summary>\n\n```\n" << transcription << "\n```\n</details>\n";
     std::ofstream(finalOutputDir + "/" + fBase + ".md") << note.str();
 
-    // 2. HTML (Sleek Corporate Design with Premium Fonts, No Emojis)
+    // 2. HTML (Sleek Corporate Design with Premium Fonts)
     std::stringstream html;
     html << "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>" << title << "</title>"
          << "<link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
@@ -213,7 +213,7 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
          << "<a href='#outcomes' class='nav-link'>Outcomes</a><a href='#transcript' class='nav-link'>Transcription</a></aside>"
          << "<main><section id='summary'><h1>" << title << "</h1>"
          << "<div class='meta-bar'><span>Date: " << date_ss.str() << "</span><span>Participants: " << p << "</span><span style='margin-left:auto'>Persona: <strong>" << config.persona << "</strong></span></div>"
-         << "<div class='callout abstract'><h2>Summary</h2><p>" << real_os << "</p></div>"
+         << "<div class='callout abstract'><h2>Summary</h2><p>" << os << "</p></div>"
          << "<div class='callout important'><h2>Key Takeaways</h2>" << md_to_html(kt) << "</div>";
     
     if (!research.empty()) html << "<div class='callout info'><h2>AI Research & Context</h2>" << md_to_html(research) << "</div>";
@@ -266,7 +266,7 @@ int main(int argc, char** argv) {
         bool keep_running = true;
         while (keep_running && !shutdown_requested) {
             std::stringstream trans_text; std::string rolling_context = "";
-            AudioCapture audioCapture; if (!audioCapture.startCapture()) { std::cerr << "Mic error.\n"; return 1; }
+            AudioCapture audioCapture; if (!audioCapture.startCapture()) { std::cerr << "Mic failed.\n"; return 1; }
             std::thread ui_thread;
             if (showUI) {
                 TerminalUI::setEnabled(true); TerminalUI::init(); TerminalUI::clearSegments(); TerminalUI::setStatus("Recording");
@@ -329,9 +329,9 @@ int main(int argc, char** argv) {
         char bh[4]; file.read(bh, 4); file.ignore(4); file.read(bh, 4);
         uint16_t af=0, nc=0, bps=0; uint32_t sr=0, ds=0;
         while (file.read(bh, 4)) {
-            std::string id(bh, 4); uint32_t csz; file.read(reinterpret_cast<char*>(&csz), 4);
-            if (id == "fmt ") { file.read(reinterpret_cast<char*>(&af), 2); file.read(reinterpret_cast<char*>(&nc), 2); file.read(reinterpret_cast<char*>(&sr), 4); file.ignore(6); file.read(reinterpret_cast<char*>(&bps), 2); file.ignore(csz - 16); }
-            else if (id == "data") { ds = csz; break; } else file.ignore(csz);
+            std::string id(bh, 4); uint32_t chunk_sz; file.read(reinterpret_cast<char*>(&chunk_sz), 4);
+            if (id == "fmt ") { file.read(reinterpret_cast<char*>(&af), 2); file.read(reinterpret_cast<char*>(&nc), 2); file.read(reinterpret_cast<char*>(&sr), 4); file.ignore(6); file.read(reinterpret_cast<char*>(&bps), 2); file.ignore(chunk_sz - 16); }
+            else if (id == "data") { ds = chunk_sz; break; } else file.ignore(chunk_sz);
         }
         if (sr == 0) return 1;
         std::vector<char> raw(ds); file.read(raw.data(), ds); file.close();
@@ -353,9 +353,32 @@ int main(int argc, char** argv) {
                 else p_data.push_back(p_raw[x1] * (1.0 - (idx - x1)) + p_raw[x2] * (idx - x1));
             }
         } else p_data = std::move(p_raw);
-        std::cout << "Transcribing WAV file..." << std::endl;
-        auto segs = transcriber.transcribe(p_data, 4, "", [&](int p){ std::cout << "\rProgress: [" << p << "%] " << std::flush; });
-        std::cout << "\rProgress: [Done]   " << std::endl;
+        
+        std::cout << "\033[1;34mTranscribing WAV file...\033[0m" << std::endl;
+        auto start_proc = std::chrono::steady_clock::now();
+        const char* spin = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+        
+        auto segs = transcriber.transcribe(p_data, 4, "", [&](int p){
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start_proc).count();
+            int width = 40;
+            int pos = width * p / 100;
+            
+            std::cout << "\r\033[K" << spin[(elapsed*2) % 10] << " [";
+            for (int i = 0; i < width; ++i) {
+                if (i < pos) std::cout << "\033[1;32m■\033[0m";
+                else if (i == pos) std::cout << "\033[1;37m▶\033[0m";
+                else std::cout << "\033[90m.\033[0m";
+            }
+            std::cout << "] " << p << "% | " << elapsed << "s";
+            if (p > 5) {
+                int eta = (int)((float)elapsed / (p / 100.0f)) - (int)elapsed;
+                std::cout << " | ETA: " << std::max(0, (int)eta) << "s";
+            }
+            std::cout << std::flush;
+        });
+        std::cout << "\r\033[K\033[1;32m✔ Transcription Complete! [100%]\033[0m" << std::endl;
+        
         std::stringstream ft;
         for (const auto& s : segs) ft << format_timestamp(s.t0 * 10) << ": " << s.text << "\n";
         save_meeting_reports(ft.str(), config, fs::path(wavPath).stem().string());
