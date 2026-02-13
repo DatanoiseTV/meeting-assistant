@@ -27,6 +27,7 @@ void signal_handler(int s) {
 }
 
 void trim(std::string& s) {
+    if (s.empty()) return;
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
     s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
     if (s.size() >= 2 && s.front() == '"' && s.back() == '"') s = s.substr(1, s.size() - 2);
@@ -50,34 +51,56 @@ std::string format_timestamp(int64_t t_ms) {
 }
 
 std::string md_to_html(const std::string& md) {
-    std::stringstream ss;
+    std::stringstream html;
     std::istringstream iss(md);
     std::string line;
     bool in_list = false;
+
+    auto process_inline = [](std::string s) {
+        // Bold **text**
+        size_t b;
+        while ((b = s.find("**")) != std::string::npos) {
+            size_t e = s.find("**", b + 2);
+            if (e != std::string::npos) {
+                s.replace(e, 2, "</strong>");
+                s.replace(b, 2, "<strong>");
+            } else break;
+        }
+        // Wikilinks [[Text]]
+        while ((b = s.find("[[")) != std::string::npos) {
+            size_t e = s.find("]]", b + 2);
+            if (e != std::string::npos) {
+                s.erase(e, 2);
+                s.erase(b, 2);
+            } else break;
+        }
+        return s;
+    };
+
     while (std::getline(iss, line)) {
+        std::string raw = line;
         trim(line);
         if (line.empty()) continue;
-        
-        // Handle callout start (simplified)
-        if (line.rfind("> [!", 0) == 0) {
-            if (in_list) { ss << "</ul>"; in_list = false; }
-            ss << "<div class='callout'><p>";
-            continue;
-        }
-        
-        if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0 || line.rfind("- [ ] ", 0) == 0 || line.rfind("- [x] ", 0) == 0) {
-            if (!in_list) { ss << "<ul>"; in_list = true; }
-            size_t bullet_len = (line.find("[ ]") != std::string::npos || line.find("[x]") != std::string::npos) ? 6 : 2;
-            ss << "<li>" << line.substr(bullet_len) << "</li>";
+
+        if (line.rfind("- ", 0) == 0 || line.rfind("* ", 0) == 0) {
+            if (!in_list) { html << "<ul>"; in_list = true; }
+            std::string content = line.substr(2);
+            trim(content);
+            // Checkboxes
+            if (content.rfind("[ ]", 0) == 0) content = "☐ " + content.substr(3);
+            else if (content.rfind("[x]", 0) == 0) content = "☑ " + content.substr(3);
+            html << "<li>" << process_inline(content) << "</li>";
         } else {
-            if (in_list) { ss << "</ul>"; in_list = false; }
-            if (line.rfind("# ", 0) == 0) ss << "<h2>" << line.substr(2) << "</h2>";
-            else if (line.rfind("## ", 0) == 0) ss << "<h3>" << line.substr(3) << "</h3>";
-            else ss << "<p>" << line << "</p>";
+            if (in_list) { html << "</ul>"; in_list = false; }
+            if (line.rfind("### ", 0) == 0) html << "<h4>" << process_inline(line.substr(4)) << "</h4>";
+            else if (line.rfind("## ", 0) == 0) html << "<h3>" << process_inline(line.substr(3)) << "</h3>";
+            else if (line.rfind("# ", 0) == 0) html << "<h2>" << process_inline(line.substr(2)) << "</h2>";
+            else if (line.rfind("> ", 0) == 0) html << "<blockquote>" << process_inline(line.substr(2)) << "</blockquote>";
+            else html << "<p>" << process_inline(line) << "</p>";
         }
     }
-    if (in_list) ss << "</ul>";
-    return ss.str();
+    if (in_list) html << "</ul>";
+    return html.str();
 }
 
 void print_usage(const char* prog) {
@@ -93,7 +116,7 @@ void print_usage(const char* prog) {
     std::cout << "  -k <key>               API Key or base URL.\n";
     std::cout << "  -L <model>             LLM Model name.\n";
     std::cout << "  --obsidian-vault-path  Path to your Obsidian vault root.\n";
-    std::cout << "  --save-config          Save defaults to config.json.\n";
+    std::cout << "  --save-config          Save provided flags as default.\n";
 }
 
 void save_meeting_reports(const std::string& transcription, const Config::Data& config, const std::string& baseName) {
@@ -112,84 +135,86 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     std::cout << "Generating AI Analysis (" << config.persona << ")..." << std::endl;
     std::string master = client->generateSummary(get_obsidian_prompt(config.persona) + transcription);
     
-    if (master.empty() || (master.find("Error") != std::string::npos && master.length() < 100)) {
+    if (master.empty() || (master.find("Error") != std::string::npos && master.length() < 150)) {
         std::cerr << "LLM Error: " << master << std::endl;
         return;
     }
 
-    auto ext = [&](const std::string& c, const std::string& s, const std::string& e) {
+    auto ext = [&](const std::string& c, const std::string& s) {
         size_t st = c.find(s); if (st == std::string::npos) return std::string();
-        st += s.length(); size_t en = c.find(e, st); return c.substr(st, (en == std::string::npos) ? std::string::npos : en - st);
+        st += s.length(); size_t en = c.find("---", st);
+        return c.substr(st, (en == std::string::npos) ? std::string::npos : en - st);
     };
     auto tsec = [](std::string& s) {
-        s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-        s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
-        if (s.size() >= 2 && s.front() == '"' && s.back() == '"') s = s.substr(1, s.size() - 2);
+        trim(s);
+        // Remove trailing delimiters if LLM was sloppy
+        if (s.length() >= 3 && s.substr(s.length()-3) == "---") s = s.substr(0, s.length()-3);
+        trim(s);
     };
 
-    std::string p = ext(master, "---PARTICIPANTS---", "---TAGS---"); tsec(p);
-    std::string t = ext(master, "---TAGS---", "---TITLE---"); tsec(t);
-    std::string title = ext(master, "---TITLE---", "---TOPIC---"); tsec(title);
-    std::string topic = ext(master, "---TOPIC---", "---YAML_SUMMARY---"); tsec(topic);
-    std::string ys = ext(master, "---YAML_SUMMARY---", "---OVERVIEW_SUMMARY---"); tsec(ys);
-    std::string os = ext(master, "---OVERVIEW_SUMMARY---", "---KEY_TAKEAWAYS---"); tsec(os);
-    std::string kt = ext(master, "---KEY_TAKEAWAYS---", "---AGENDA_ITEMS---"); tsec(kt);
-    std::string ai = ext(master, "---AGENDA_ITEMS---", "---DISCUSSION_POINTS---"); tsec(ai);
-    std::string dp = ext(master, "---DISCUSSION_POINTS---", "---DECISIONS_MADE---"); tsec(dp);
-    std::string dm = ext(master, "---DECISIONS_MADE---", "---QUESTIONS_ARISEN---"); tsec(dm);
-    std::string qa = ext(master, "---QUESTIONS_ARISEN---", "---ACTION_ITEMS---"); tsec(qa);
-    std::string acts = ext(master, "---ACTION_ITEMS---", "---MERMAID_GRAPH---"); tsec(acts);
-    std::string graph = ext(master, "---MERMAID_GRAPH---", "---EMAIL_DRAFT---"); tsec(graph);
-    std::string email = ext(master, "---EMAIL_DRAFT---", "Transcription:"); tsec(email);
-
+    std::string title = ext(master, "---TITLE---"); tsec(title);
     if (title.empty() || title.length() < 3) title = "Meeting " + baseName;
-    std::string san = title; for (char& c : san) { if (std::isspace(c)) c = '-'; else if (!std::isalnum(c) && c != '-') c = '_'; }
     
+    std::string p = ext(master, "---PARTICIPANTS---"); tsec(p);
+    std::string t = ext(master, "---TAGS---"); tsec(t);
+    std::string topic = ext(master, "---TOPIC---"); tsec(topic);
+    std::string ys = ext(master, "---YAML_SUMMARY---"); tsec(ys);
+    std::string os = ext(master, "---OVERVIEW_SUMMARY---"); tsec(os);
+    std::string kt = ext(master, "---KEY_TAKEAWAYS---"); tsec(kt);
+    std::string ai = ext(master, "---AGENDA_ITEMS---"); tsec(ai);
+    std::string dp = ext(master, "---DISCUSSION_POINTS---"); tsec(dp);
+    std::string dm = ext(master, "---DECISIONS_MADE---"); tsec(dm);
+    std::string qa = ext(master, "---QUESTIONS_ARISEN---"); tsec(qa);
+    std::string acts = ext(master, "---ACTION_ITEMS---"); tsec(acts);
+    std::string graph = ext(master, "---MERMAID_GRAPH---"); tsec(graph);
+    std::string email = ext(master, "---EMAIL_DRAFT---"); tsec(email);
+
+    std::string san = title; for (char& c : san) { if (std::isspace(c)) c = '-'; else if (!std::isalnum(c) && c != '-') c = '_'; }
     auto now = std::chrono::system_clock::now(); auto t_now = std::chrono::system_clock::to_time_t(now);
     std::stringstream date_ss; date_ss << std::put_time(std::localtime(&t_now), "%Y-%m-%d");
     std::string fBase = san + "-" + date_ss.str();
 
     std::string research;
     if (config.research && config.provider == "gemini") {
-        std::cout << "Researching topics (grounding)..." << std::endl;
+        std::cout << "Grounding research..." << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(2));
         research = client->researchTopics(transcription);
     }
 
-    // 1. Markdown
+    // Markdown
     std::stringstream note;
-    note << "---\ndate: " << date_ss.str() << "\ntype: meeting\ntopic: " << topic << "\nparticipants: [" << p << "]\ntags: [" << t << "]\nsummary: " << ys << "\n---\n\n";
-    note << "Status:: #processed\n\n> [!ABSTRACT] Executive Summary\n> " << os << "\n\n> [!IMPORTANT] Key Takeaways\n" << kt << "\n\n";
-    if (!research.empty()) note << "> [!INFO] AI Research\n" << research << "\n\n";
-    if (!graph.empty() && graph.length() > 10) note << "## Visual Map\n```mermaid\n" << graph << "\n```\n\n";
+    note << "---\ndate: " << date_ss.str() << "\ntype: meeting\ntopic: " << (topic.empty()?"N/A":topic) << "\nparticipants: [" << p << "]\ntags: [" << t << "]\nsummary: " << ys << "\n---\n\n";
+    note << "Status:: #processed\n\n> [!ABSTRACT] Summary\n> " << os << "\n\n> [!IMPORTANT] Takeaways\n" << kt << "\n\n";
+    if (!research.empty()) note << "> [!INFO] Research\n" << research << "\n\n";
+    if (!graph.empty() && graph.length() > 10) note << "## Map\n```mermaid\n" << graph << "\n```\n\n";
     note << "## Meeting Details\n\n### Agenda\n" << ai << "\n\n### Discussion\n" << dp << "\n\n### Questions\n" << qa << "\n\n## Outcomes\n\n### Decisions\n" << dm << "\n\n### Action Items\n" << acts << "\n\n## Appendix\n<details><summary>Transcript</summary>\n\n```\n" << transcription << "\n```\n</details>\n";
     std::ofstream(finalOutputDir + "/" + fBase + ".md") << note.str();
 
-    // 2. HTML (Amazing Standalone Report)
+    // HTML (Refined Tidy Design)
     std::stringstream html;
-    html << "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>" << title << "</title><style>"
-         << "body{font-family:'Inter',system-ui,-apple-system,sans-serif;line-height:1.6;color:#2d3436;max-width:900px;margin:40px auto;padding:20px;background:#f0f2f5}"
-         << ".card{background:#fff;padding:40px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,0.05);margin-bottom:30px;border:1px solid #e1e4e8}"
-         << "h1{color:#0984e3;margin-bottom:10px;font-size:2.5em;font-weight:800;letter-spacing:-0.02em} "
-         << ".meta{color:#636e72;font-size:1em;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #f1f2f6}"
-         << ".callout{padding:25px;border-radius:15px;margin:25px 0;border-left:8px solid #dfe6e9;background:#fdfdfe}"
-         << ".abstract{background:#ebf5ff;border-left-color:#0984e3} .important{background:#fff9e6;border-left-color:#f1c40f} .info{background:#e6fffa;border-left-color:#00b894}"
-         << "h2{color:#2d3436;font-size:1.8em;margin-top:40px;border-bottom:2px solid #f1f2f6;padding-bottom:10px} h3{color:#636e72;font-size:1.3em;margin-top:25px}"
-         << "ul{padding-left:20px} li{margin-bottom:10px} pre{background:#2d3436;color:#fab1a0;padding:25px;border-radius:12px;overflow-x:auto;font-family:'Fira Code',monospace;font-size:0.9em;line-height:1.4}"
-         << ".tag{display:inline-block;background:#dfe6e9;padding:2px 10px;border-radius:20px;font-size:0.8em;margin-right:5px;color:#636e72}"
+    html << "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>" << title << "</title><style>"
+         << "body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#1a1a1a;max-width:850px;margin:40px auto;padding:20px;background:#f8f9fa}"
+         << ".card{background:#fff;padding:40px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);border:1px solid #e9ecef}"
+         << "h1{color:#0056b3;margin-bottom:8px;font-size:2.2em;border-bottom:3px solid #0056b3;padding-bottom:10px} "
+         << ".meta{color:#6c757d;font-size:0.95em;margin-bottom:30px} "
+         << ".callout{padding:20px;border-radius:8px;margin:25px 0;border-left:6px solid #dee2e6}"
+         << ".abstract{background:#e7f3ff;border-left-color:#007bff} .important{background:#fff4e5;border-left-color:#ffc107} .info{background:#eafaf1;border-left-color:#28a745}"
+         << "h2{color:#343a40;font-size:1.6em;margin-top:40px;padding-bottom:5px;border-bottom:1px solid #dee2e6} h3{color:#495057;font-size:1.2em;margin-top:25px}"
+         << "ul{padding-left:20px} li{margin-bottom:8px} blockquote{font-style:italic;color:#6c757d;border-left:4px solid #dee2e6;padding-left:15px;margin:15px 0}"
+         << "pre{background:#212529;color:#f8f9fa;padding:20px;border-radius:8px;overflow-x:auto;font-family:monospace;font-size:0.85em}"
          << "</style></head><body><div class='card'>"
-         << "<h1>" << title << "</h1><div class='meta'><strong>📅 Date:</strong> " << date_ss.str() << " | <strong>👥 Attendees:</strong> " << p << "</div>"
-         << "<div class='callout abstract'><strong>🎯 Executive Summary</strong><p>" << os << "</p></div>"
-         << "<div class='callout important'><strong>💡 Key Takeaways</strong>" << md_to_html(kt) << "</div>";
-    if (!research.empty()) html << "<div class='callout info'><strong>🔍 AI Research & Context</strong>" << md_to_html(research) << "</div>";
+         << "<h1>" << title << "</h1><div class='meta'><strong>Date:</strong> " << date_ss.str() << " | <strong>Attendees:</strong> " << p << "</div>"
+         << "<div class='callout abstract'><strong>Summary</strong><p>" << os << "</p></div>"
+         << "<div class='callout important'><strong>Key Takeaways</strong>" << md_to_html(kt) << "</div>";
+    if (!research.empty()) html << "<div class='callout info'><strong>AI Research</strong>" << md_to_html(research) << "</div>";
     html << "<h2>Meeting Details</h2><h3>Agenda</h3>" << md_to_html(ai) << "<h3>Discussion Points</h3>" << md_to_html(dp);
     if (!qa.empty()) html << "<h3>Questions Arisen</h3>" << md_to_html(qa);
-    html << "<h2>Outcomes & Actions</h2><h3>Decisions</h3>" << md_to_html(dm) << "<h3>Action Items</h3>" << md_to_html(acts);
-    html << "<h2>Appendix</h2><h3>Raw Transcription</h3><pre>" << transcription << "</pre></div></body></html>";
+    html << "<h2>Outcomes</h2><h3>Decisions</h3>" << md_to_html(dm) << "<h3>Action Items</h3>" << md_to_html(acts);
+    html << "<h2>Appendix</h2><h3>Transcription</h3><pre>" << transcription << "</pre></div></body></html>";
     std::ofstream(finalOutputDir + "/" + fBase + ".html") << html.str();
     
     if (!email.empty()) std::ofstream(finalOutputDir + "/" + fBase + "_email.txt") << email;
-    std::cout << "[Success] Reports saved to " << fBase << "\n";
+    std::cout << "[Success] Reports saved: " << fBase << "\n";
 }
 
 int main(int argc, char** argv) {
@@ -215,7 +240,7 @@ int main(int argc, char** argv) {
         else if (arg == "--vad-threshold" && i + 1 < argc) config.vad_threshold = std::stof(argv[++i]);
         else if (arg == "--save-config") saveConfig = true;
         else if (arg == "--help" || arg == "-h") { print_usage(argv[0]); return 0; }
-        else { std::cerr << "Unknown argument: " << arg << "\n"; print_usage(argv[0]); return 1; }
+        else { std::cerr << "Unknown arg: " << arg << "\n"; print_usage(argv[0]); return 1; }
     }
 
     if (saveConfig) { Config::save(config); return 0; }
@@ -302,9 +327,7 @@ int main(int argc, char** argv) {
             }
         } else p_data = std::move(p_raw);
         std::cout << "Transcribing file..." << std::endl;
-        auto segs = transcriber.transcribe(p_data, 4, "", [&](int p){
-            std::cout << "\rProgress: [" << p << "%] " << std::flush;
-        });
+        auto segs = transcriber.transcribe(p_data, 4, "", [&](int p){ std::cout << "\rProgress: [" << p << "%] " << std::flush; });
         std::cout << "\rProgress: [Done]   " << std::endl;
         std::stringstream ft;
         for (const auto& s : segs) ft << format_timestamp(s.t0 * 10) << ": " << s.text << "\n";
