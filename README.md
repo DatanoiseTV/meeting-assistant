@@ -93,7 +93,12 @@ sudo make install
 *   **[Q / ESC]**: Save all reports and Quit.
 
 ## Configuration
-Settings are persisted in `~/.meeting_assistant/config.json`. Update your default vault path or API keys using the `--save-config` flag.
+Settings are persisted in `~/.meeting_assistant/config.json`. 
+
+1.  **Template**: Copy the provided `config.json.example` to `~/.meeting_assistant/config.json`.
+2.  **CLI**: Alternatively, update settings via the command line using the `--save-config` flag.
+
+Refer to `config.json.example` for a full list of supported fields including GitHub/GitLab integration.
 
 ## License
 Apache License 2.0 - See `LICENSE` for details.

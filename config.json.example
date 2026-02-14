@@ -1,0 +1,41 @@
+{
+  "//": "Meeting Assistant Configuration Template",
+  
+  "// LLM Provider: 'gemini', 'openai', or 'ollama'",
+  "provider": "gemini",
+  
+  "// API Key for your provider. For Ollama, this can be left empty.",
+  "api_key": "YOUR_API_KEY_HERE",
+  
+  "// LLM Model to use (e.g., 'gemini-1.5-flash', 'gpt-4o', 'llama3')",
+  "llm_model": "gemini-1.5-flash",
+  
+  "// Path to the Whisper ggml model file",
+  "model_path": "models/ggml-base.en.bin",
+  
+  "// Output directory for reports and transcripts",
+  "output_dir": "output",
+  
+  "// Mode: 'standard' or 'obsidian'",
+  "mode": "obsidian",
+  
+  "// Path to your Obsidian vault root (used if mode is 'obsidian')",
+  "obsidian_vault_path": "/Users/username/Documents/MyVault",
+  
+  "// Default persona: 'general', 'dev', 'pm', 'exec'",
+  "persona": "general",
+  
+  "// Enable real-time web research (Gemini only)",
+  "research": false,
+  
+  "// GitHub Integration (for automatic issue creation)",
+  "github_token": "ghp_your_token_here",
+  "github_repo": "username/project",
+  
+  "// GitLab Integration (for automatic issue creation)",
+  "gitlab_token": "glpat-your_token_here",
+  "gitlab_repo": "username/project",
+  
+  "// VAD sensitivity (lower is more sensitive)",
+  "vad_threshold": 0.01
+}
