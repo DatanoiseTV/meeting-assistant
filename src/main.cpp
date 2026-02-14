@@ -18,6 +18,7 @@
 #include "AudioCapture.h"
 #include "Config.h"
 #include "TerminalUI.h"
+#include "Integrations.h"
 
 #ifdef __APPLE__
 #include "MacTrayApp.h"
@@ -101,6 +102,25 @@ std::string md_to_html(const std::string& md) {
     }
     if (in_list) html << "</ul>";
     return html.str();
+}
+
+void sync_action_items(const std::string& acts, const Config::Data& config, const std::string& meeting_title) {
+    auto trackers = IntegrationFactory::createTrackers(config);
+    if (trackers.empty()) return;
+    std::istringstream iss(acts);
+    std::string line;
+    while (std::getline(iss, line)) {
+        trim(line);
+        if (line.empty()) continue;
+        if (line.rfind("- ", 0) == 0) {
+            std::string task = line.substr(2);
+            if (task.rfind("[ ] ", 0) == 0) task = task.substr(4);
+            for (auto& tracker : trackers) {
+                std::cout << "Syncing: " << task << std::endl;
+                tracker->createIssue(task, "Automatically created from meeting: " + meeting_title);
+            }
+        }
+    }
 }
 
 void print_usage(const char* prog) {
@@ -188,7 +208,7 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     note << "## Meeting Details\n\n### Agenda\n" << ai << "\n\n### Discussion\n" << dp << "\n\n### Questions\n" << qa << "\n\n## Outcomes\n\n### Decisions\n" << dm << "\n\n### Action Items\n" << acts << "\n\n## Appendix\n<details><summary>Transcript</summary>\n\n```\n" << transcription << "\n```\n</details>\n";
     std::ofstream(finalOutputDir + "/" + fBase + ".md") << note.str();
 
-    // 2. HTML Output (Masterclass Design)
+    // 2. HTML (Masterclass Design)
     std::stringstream html;
     html << "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>" << title << "</title>"
          << "<link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
@@ -233,7 +253,8 @@ void save_meeting_reports(const std::string& transcription, const Config::Data& 
     std::ofstream(finalOutputDir + "/" + fBase + ".html") << html.str();
     
     if (!email.empty()) std::ofstream(finalOutputDir + "/" + fBase + "_email.txt") << email;
-    std::cout << "[Success] Sleek professional reports generated: " << fBase << "\n";
+    sync_action_items(acts, config, title);
+    std::cout << "[Success] Amazing reports generated: " << fBase << "\n";
 }
 
 int main(int argc, char** argv) {
@@ -388,7 +409,7 @@ int main(int argc, char** argv) {
             std::cout << "] " << p << "% | " << elapsed << "s";
             if (p > 5) {
                 int eta = (int)((float)elapsed / (p / 100.0f)) - (int)elapsed;
-                std::cout << " | ETA: " << std::max(0, eta) << "s";
+                std::cout << " | ETA: " << std::max(0, (int)eta) << "s";
             }
             std::cout << std::flush;
         });

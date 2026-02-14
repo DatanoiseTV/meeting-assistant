@@ -14,6 +14,10 @@ public:
         std::string obsidian_vault_path;
         std::string persona = "general";
         bool research = false;
+        std::string github_token;
+        std::string github_repo;
+        std::string gitlab_token;
+        std::string gitlab_repo;
         float vad_threshold = 0.01f;
         int vad_silence_ms = 1000;
     };
