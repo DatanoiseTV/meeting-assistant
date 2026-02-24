@@ -299,7 +299,7 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
           ),
 
         // Fixed bottom action bar
-        if (_selectedTab == 0 && !showAsAnalyzed)
+        if (_selectedTab == 0)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -320,14 +320,21 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
                   FilledButton.icon(
                     onPressed: isAnalyzing
                         ? null
-                        : () => ref
-                              .read(meetingAnalysisProvider.notifier)
-                              .analyzeMeeting(widget.transcription),
+                        : () {
+                            ref.read(meetingAnalysisProvider.notifier).reset();
+                            ref
+                                .read(meetingAnalysisProvider.notifier)
+                                .analyzeMeeting(widget.transcription);
+                          },
                     icon: Icon(
                       isAnalyzing ? Icons.hourglass_empty : Icons.psychology,
                       size: 20,
                     ),
-                    label: Text(isAnalyzing ? 'Analyzing...' : 'Analyze'),
+                    label: Text(
+                      isAnalyzing
+                          ? 'Analyzing...'
+                          : (showAsAnalyzed ? 'Re-analyze' : 'Analyze'),
+                    ),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
