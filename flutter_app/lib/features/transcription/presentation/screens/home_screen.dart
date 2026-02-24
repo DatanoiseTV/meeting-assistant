@@ -100,43 +100,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isCompleted =
         transcriptionState.status == TranscriptionStatus.completed;
 
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          Text(
-            'Meeting Assistant',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height - 200,
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Record your meetings and get AI-powered insights',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 20),
+              Text(
+                'Meeting Assistant',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Record your meetings and get AI-powered insights',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 40),
+              RecordButton(state: transcriptionState),
+              const SizedBox(height: 24),
+              _buildStatusText(context, transcriptionState),
+              const SizedBox(height: 16),
+              if (isCompleted) ...[
+                FilledButton.icon(
+                  onPressed: () {
+                    ref.read(transcriptionProvider.notifier).reset();
+                    setState(() => _selectedIndex = 1);
+                  },
+                  icon: const Icon(Icons.visibility),
+                  label: const Text('View Meeting'),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
           ),
-          const Spacer(),
-          RecordButton(state: transcriptionState),
-          const SizedBox(height: 24),
-          _buildStatusText(context, transcriptionState),
-          const SizedBox(height: 16),
-          if (isCompleted) ...[
-            FilledButton.icon(
-              onPressed: () {
-                ref.read(transcriptionProvider.notifier).reset();
-                setState(() => _selectedIndex = 1);
-              },
-              icon: const Icon(Icons.visibility),
-              label: const Text('View Meeting'),
-            ),
-            const SizedBox(height: 8),
-          ],
-          const Spacer(),
-        ],
+        ),
       ),
     );
   }
@@ -376,10 +383,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     : null,
                 color: todo.actionItem.isCompleted ? Colors.grey : null,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
               todo.meetingTitle,
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             onTap: () {
               Navigator.push(
@@ -616,7 +627,10 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(meeting.title ?? 'Meeting'),
+        title: Text(
+          meeting.title ?? 'Meeting',
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_outline),
@@ -677,6 +691,9 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
         emailDraft: meeting.emailDraft,
         questions: meeting.questions,
         discussionPoints: meeting.discussionPoints,
+        researchResults: meeting.researchResults,
+        researchRecommendations: meeting.researchRecommendations,
+        researchComments: meeting.researchComments,
       ),
     );
   }
@@ -759,12 +776,18 @@ class SettingsScreenContent extends ConsumerWidget {
     );
     return DropdownButtonFormField<String>(
       value: selectedModel['id'],
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'Model',
         prefixIcon: Icon(Icons.model_training),
       ),
       items: _geminiModels
-          .map((m) => DropdownMenuItem(value: m['id'], child: Text(m['name']!)))
+          .map(
+            (m) => DropdownMenuItem(
+              value: m['id'],
+              child: Text(m['name']!, overflow: TextOverflow.ellipsis),
+            ),
+          )
           .toList(),
       onChanged: (val) {
         if (val != null) {

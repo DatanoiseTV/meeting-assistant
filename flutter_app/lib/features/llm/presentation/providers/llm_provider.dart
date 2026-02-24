@@ -89,6 +89,9 @@ class MeetingReport {
   final String dates;
   final String graphData;
   final String emailDraft;
+  final String researchResults;
+  final String researchRecommendations;
+  final String researchComments;
 
   const MeetingReport({
     required this.title,
@@ -108,6 +111,9 @@ class MeetingReport {
     required this.dates,
     required this.graphData,
     required this.emailDraft,
+    this.researchResults = '',
+    this.researchRecommendations = '',
+    this.researchComments = '',
   });
 
   List<GraphEdge> get graphEdges {
@@ -289,6 +295,9 @@ class MeetingReport {
       dates: extract('DATES'),
       graphData: extract('GRAPH_DATA'),
       emailDraft: extract('EMAIL_DRAFT'),
+      researchResults: extract('RESEARCH_RESULTS'),
+      researchRecommendations: extract('RESEARCH_RECOMMENDATIONS'),
+      researchComments: extract('RESEARCH_COMMENTS'),
     );
   }
 
@@ -327,6 +336,11 @@ class MeetingReport {
       dates: _toString(json['dates']),
       graphData: _toString(json['graphData']),
       emailDraft: _toString(json['emailDraft']),
+      researchResults: _toString(json['researchResults']),
+      researchRecommendations: _listToJsonString(
+        json['researchRecommendations'],
+      ),
+      researchComments: _toString(json['researchComments']),
     );
   }
 }
@@ -412,6 +426,101 @@ class MeetingAnalysisNotifier extends StateNotifier<MeetingAnalysisState> {
     }
   }
 
+  Future<void> researchTopics(
+    String transcription, {
+    MeetingReport? existingReport,
+  }) async {
+    if (_llmService == null) {
+      state = state.copyWith(
+        status: AnalysisStatus.error,
+        errorMessage:
+            'Please configure LLM in Settings (provider, API key, model)',
+      );
+      return;
+    }
+
+    try {
+      state = state.copyWith(status: AnalysisStatus.analyzing);
+
+      final prompt = _buildResearchPrompt(transcription);
+      final response = await _llmService.generateResearch(prompt);
+
+      if (response.isError) {
+        state = state.copyWith(
+          status: AnalysisStatus.error,
+          errorMessage: response.error,
+        );
+      } else {
+        MeetingReport finalReport;
+
+        if (response.json != null) {
+          final newResearch = MeetingReport.fromJson(response.json!);
+          finalReport = MeetingReport(
+            title: existingReport?.title ?? newResearch.title,
+            tagline: existingReport?.tagline ?? newResearch.tagline,
+            overview: existingReport?.overview ?? newResearch.overview,
+            participants:
+                existingReport?.participants ?? newResearch.participants,
+            tags: existingReport?.tags ?? newResearch.tags,
+            topic: existingReport?.topic ?? newResearch.topic,
+            summary: existingReport?.summary ?? newResearch.summary,
+            keyTakeaways:
+                existingReport?.keyTakeaways ?? newResearch.keyTakeaways,
+            agendaItems: existingReport?.agendaItems ?? newResearch.agendaItems,
+            discussionPoints:
+                existingReport?.discussionPoints ??
+                newResearch.discussionPoints,
+            questions: existingReport?.questions ?? newResearch.questions,
+            decisions: existingReport?.decisions ?? newResearch.decisions,
+            suggestions: existingReport?.suggestions ?? newResearch.suggestions,
+            actionItems: existingReport?.actionItems ?? newResearch.actionItems,
+            dates: existingReport?.dates ?? newResearch.dates,
+            graphData: existingReport?.graphData ?? newResearch.graphData,
+            emailDraft: existingReport?.emailDraft ?? newResearch.emailDraft,
+            researchResults: newResearch.researchResults,
+            researchRecommendations: newResearch.researchRecommendations,
+            researchComments: newResearch.researchComments,
+          );
+        } else {
+          final parsed = MeetingReport.parse(response.text);
+          finalReport = MeetingReport(
+            title: existingReport?.title ?? parsed.title,
+            tagline: existingReport?.tagline ?? parsed.tagline,
+            overview: existingReport?.overview ?? parsed.overview,
+            participants: existingReport?.participants ?? parsed.participants,
+            tags: existingReport?.tags ?? parsed.tags,
+            topic: existingReport?.topic ?? parsed.topic,
+            summary: existingReport?.summary ?? parsed.summary,
+            keyTakeaways: existingReport?.keyTakeaways ?? parsed.keyTakeaways,
+            agendaItems: existingReport?.agendaItems ?? parsed.agendaItems,
+            discussionPoints:
+                existingReport?.discussionPoints ?? parsed.discussionPoints,
+            questions: existingReport?.questions ?? parsed.questions,
+            decisions: existingReport?.decisions ?? parsed.decisions,
+            suggestions: existingReport?.suggestions ?? parsed.suggestions,
+            actionItems: existingReport?.actionItems ?? parsed.actionItems,
+            dates: existingReport?.dates ?? parsed.dates,
+            graphData: existingReport?.graphData ?? parsed.graphData,
+            emailDraft: existingReport?.emailDraft ?? parsed.emailDraft,
+            researchResults: parsed.researchResults,
+            researchRecommendations: parsed.researchRecommendations,
+            researchComments: parsed.researchComments,
+          );
+        }
+
+        state = state.copyWith(
+          status: AnalysisStatus.completed,
+          report: finalReport,
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(
+        status: AnalysisStatus.error,
+        errorMessage: e.toString(),
+      );
+    }
+  }
+
   String _buildAnalysisPrompt(String transcription, String persona) {
     String personaInstructions;
     switch (persona.toLowerCase()) {
@@ -461,7 +570,23 @@ DATES: date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description (one per line)
 ---ACTION_ITEMS---
 ---DATES---
 ---GRAPH_DATA---
----EMAIL_DRAFT---''';
+---EMAIL_DRAFT---
+---RESEARCH_RESULTS---
+---RESEARCH_RECOMMENDATIONS---
+---RESEARCH_COMMENTS---''';
+  }
+
+  String _buildResearchPrompt(String transcription) {
+    return '''Please research the key topics discussed in the following meeting transcript and provide actionable recommendations based on current information from the web:
+
+$transcription
+
+Use Google Search to find relevant, up-to-date information on the topics discussed. Based on your research:
+1. Summarize what you found (RESEARCH_RESULTS)
+2. Provide actionable recommendations based on your findings (RESEARCH_RECOMMENDATIONS - JSON array)
+3. Add any additional insights or comments (RESEARCH_COMMENTS)
+
+IMPORTANT: Use JSON arrays for all list fields. Never use dashes or bullets.''';
   }
 
   void reset() {
@@ -484,6 +609,9 @@ DATES: date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description (one per line)
     required String emailDraft,
     required String questions,
     required String discussionPoints,
+    String researchResults = '',
+    String researchRecommendations = '',
+    String researchComments = '',
   }) {
     final report = MeetingReport(
       title: title,
@@ -503,6 +631,9 @@ DATES: date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description (one per line)
       dates: dates,
       graphData: graphData,
       emailDraft: emailDraft,
+      researchResults: researchResults,
+      researchRecommendations: researchRecommendations,
+      researchComments: researchComments,
     );
     state = MeetingAnalysisState(
       status: AnalysisStatus.completed,

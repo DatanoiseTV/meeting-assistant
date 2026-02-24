@@ -23,6 +23,9 @@ class Meeting {
   final String? graphData;
   final String? emailDraft;
   final bool isAnalyzed;
+  final String? researchResults;
+  final String? researchRecommendations;
+  final String? researchComments;
 
   Meeting({
     required this.id,
@@ -47,6 +50,9 @@ class Meeting {
     this.graphData,
     this.emailDraft,
     this.isAnalyzed = false,
+    this.researchResults,
+    this.researchRecommendations,
+    this.researchComments,
   });
 
   String get formattedDuration {
@@ -82,6 +88,9 @@ class Meeting {
     String? graphData,
     String? emailDraft,
     bool? isAnalyzed,
+    String? researchResults,
+    String? researchRecommendations,
+    String? researchComments,
   }) {
     return Meeting(
       id: id ?? this.id,
@@ -106,6 +115,10 @@ class Meeting {
       graphData: graphData ?? this.graphData,
       emailDraft: emailDraft ?? this.emailDraft,
       isAnalyzed: isAnalyzed ?? this.isAnalyzed,
+      researchResults: researchResults ?? this.researchResults,
+      researchRecommendations:
+          researchRecommendations ?? this.researchRecommendations,
+      researchComments: researchComments ?? this.researchComments,
     );
   }
 
@@ -132,6 +145,9 @@ class Meeting {
     'graphData': graphData,
     'emailDraft': emailDraft,
     'isAnalyzed': isAnalyzed,
+    'researchResults': researchResults,
+    'researchRecommendations': researchRecommendations,
+    'researchComments': researchComments,
   };
 
   factory Meeting.fromJson(Map<String, dynamic> json) => Meeting(
@@ -165,6 +181,9 @@ class Meeting {
     graphData: json['graphData'],
     emailDraft: json['emailDraft'],
     isAnalyzed: json['isAnalyzed'] ?? false,
+    researchResults: json['researchResults'],
+    researchRecommendations: json['researchRecommendations'],
+    researchComments: json['researchComments'],
   );
 }
 

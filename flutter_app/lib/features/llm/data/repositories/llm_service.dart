@@ -43,7 +43,7 @@ class LLMService {
   final String apiKey;
   final String model;
 
-  static const int maxRetries = 2;
+  static const int maxRetries = 1;
   static const int initialRetryDelayMs = 2000;
 
   static const List<String> flashModels = [
@@ -55,15 +55,52 @@ class LLMService {
     'gemini-2.0-flash-lite',
   ];
 
+  static const String _researchSystemPrompt =
+      '''You are a research assistant that analyzes meeting topics and provides valuable insights based on current information from the web.
+
+IMPORTANT: NEVER use dash "-" or bullet points "*" for lists. Only use JSON arrays.
+All list fields must be proper JSON arrays like ["item1", "item2"] - never use:
+- "- item"
+- "* item"  
+- "1. item"
+
+When given a meeting transcript or summary, you will:
+1. Identify key topics and concepts discussed
+2. Research those topics using web search
+3. Provide actionable recommendations, comments, and suggestions based on your research
+
+OUTPUT FORMAT REQUIREMENTS:
+- Keep descriptions concise but informative
+- Base your recommendations on verified information from web searches
+- If no information available, write "Unable to research"
+
+JSON STRUCTURE:
+All fields should be strings or arrays of strings.''';
+
+  static const String _researchJsonSchema = '''
+{
+  "type": "object",
+  "properties": {
+    "researchResults": {"type": "string", "description": "Summary of research findings from web search"},
+    "researchRecommendations": {"type": "array", "items": {"type": "string"}, "description": "Array of actionable recommendations based on research"},
+    "researchComments": {"type": "string", "description": "Additional insights and comments"}
+  },
+  "required": ["researchResults", "researchRecommendations"]
+}
+''';
+
   LLMService({required this.apiKey, required this.model});
 
   static const String _systemPrompt =
       '''You are a professional meeting assistant that analyzes transcriptions and creates structured summaries. 
 
+IMPORTANT: NEVER use dash "-" or bullet points "*" for lists. Only use JSON arrays.
+All list fields must be proper JSON arrays like ["item1", "item2"] - never use:
+- "- item"
+- "* item"  
+- "1. item"
+
 OUTPUT FORMAT REQUIREMENTS:
-- Use bullet points with "- " prefix for all lists
-- Use numbered lists with "1. ", "2. ", etc. for sequential items
-- Never use "* " or other bullet styles
 - Keep descriptions concise but informative
 - If no information available, write "None recorded" (not N/A, none, etc.)
 
@@ -74,7 +111,7 @@ All fields should be strings.''';
 {
   "type": "object",
   "properties": {
-    "participants": {"type": "string", "description": "Comma-separated list or bullet points"},
+    "participants": {"type": "array", "items": {"type": "string"}, "description": "Array of participants"},
     "tags": {"type": "array", "items": {"type": "string"}, "description": "Array of tags"},
     "title": {"type": "string", "description": "Short title for the meeting"},
     "tagline": {"type": "string", "description": "Very short one-line summary (max 10 words)"},
@@ -89,7 +126,10 @@ All fields should be strings.''';
     "suggestions": {"type": "array", "items": {"type": "string"}, "description": "Array of suggestions"},
     "dates": {"type": "string", "description": "date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description format, one per line"},
     "graphData": {"type": "string", "description": "Directed edges: node1->node2;node2->node3 (semicolon separated)"},
-    "emailDraft": {"type": "string", "description": "Professional email draft"}
+    "emailDraft": {"type": "string", "description": "Professional email draft"},
+    "researchResults": {"type": "string", "description": "Summary of research findings from web search"},
+    "researchRecommendations": {"type": "array", "items": {"type": "string"}, "description": "Array of actionable recommendations based on research"},
+    "researchComments": {"type": "string", "description": "Additional insights and comments"}
   },
   "required": ["title", "tagline", "summary", "actionItems"]
 }
@@ -187,7 +227,7 @@ All fields should be strings.''';
     return LLMResponse(
       text: '',
       isError: true,
-      error: 'All Gemini models failed. Please try again later.',
+      error: 'AI capacity reached. Please try again in a few minutes.',
     );
   }
 
@@ -304,6 +344,155 @@ ${json['actionItems'] ?? ''}
 ${json['graphData'] ?? ''}
 
 ---EMAIL_DRAFT---
-${json['emailDraft'] ?? ''}''';
+${json['emailDraft'] ?? ''}
+
+---RESEARCH_RESULTS---
+${json['researchResults'] ?? ''}
+
+---RESEARCH_RECOMMENDATIONS---
+${json['researchRecommendations'] ?? ''}
+
+---RESEARCH_COMMENTS---
+${json['researchComments'] ?? ''}''';
+  }
+
+  Future<LLMResponse> generateResearch(String prompt) async {
+    final modelsToTry = <String>{model, ...flashModels}.toList();
+
+    for (int i = 0; i < modelsToTry.length; i++) {
+      final currentModel = modelsToTry[i];
+      print('Trying research model: $currentModel');
+
+      final response = await _generateResearchWithModel(
+        prompt,
+        currentModel,
+        maxRetries,
+      );
+
+      if (!response.isError) {
+        print('Research success with model: $currentModel');
+        return response;
+      }
+
+      final errorLower = response.error?.toLowerCase() ?? '';
+      final isQuotaError =
+          errorLower.contains('quota') ||
+          errorLower.contains('rate limit') ||
+          errorLower.contains('resource_exhausted') ||
+          errorLower.contains('too many requests') ||
+          errorLower.contains('unavailable');
+
+      if (isQuotaError) {
+        print('Quota/rate limit with $currentModel, trying next...');
+        if (i < modelsToTry.length - 1) {
+          await Future.delayed(const Duration(seconds: 1));
+          continue;
+        }
+      }
+
+      if (i == modelsToTry.length - 1) {
+        return response;
+      }
+    }
+
+    return LLMResponse(
+      text: '',
+      isError: true,
+      error: 'AI capacity reached. Please try again in a few minutes.',
+    );
+  }
+
+  Future<LLMResponse> _generateResearchWithModel(
+    String prompt,
+    String modelName,
+    int retries,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey',
+        ),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'systemInstruction': {
+            'parts': [
+              {'text': _researchSystemPrompt},
+            ],
+          },
+          'contents': [
+            {
+              'parts': [
+                {'text': prompt},
+              ],
+            },
+          ],
+          'tools': [
+            {'googleSearch': {}},
+          ],
+          'generationConfig': {
+            'temperature': 0.7,
+            'maxOutputTokens': 8192,
+            'responseJsonSchema': jsonDecode(_researchJsonSchema),
+            'responseMimeType': 'application/json',
+          },
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['candidates'] == null || data['candidates'].isEmpty) {
+          return LLMResponse(
+            text: '',
+            isError: true,
+            error: 'No response from model',
+          );
+        }
+
+        final candidate = data['candidates'][0];
+
+        if (candidate['content'] == null) {
+          return LLMResponse(
+            text: '',
+            isError: true,
+            error: 'No content in response',
+          );
+        }
+
+        final jsonText = candidate['content']['parts'][0]['text'];
+        final parsed = jsonDecode(jsonText);
+        return LLMResponse(text: _formatAsText(parsed), json: parsed);
+      } else if ((response.statusCode == 503 || response.statusCode == 429) &&
+          retries > 0) {
+        print('Rate limited with $modelName, retrying research...');
+        await Future.delayed(
+          Duration(
+            milliseconds: initialRetryDelayMs * (maxRetries - retries + 1),
+          ),
+        );
+        return _generateResearchWithModel(prompt, modelName, retries - 1);
+      } else {
+        final errorData = jsonDecode(response.body);
+        final errorMsg = errorData['error']?['message'] ?? 'Unknown error';
+        final status = errorData['error']?['status'] ?? '';
+
+        String friendlyMessage;
+        if (status == 'RESOURCE_EXHAUSTED' || response.statusCode == 429) {
+          friendlyMessage = 'Quota exceeded. Trying next model...';
+        } else if (response.statusCode == 503) {
+          friendlyMessage = 'Service temporarily unavailable.';
+        } else {
+          friendlyMessage = errorMsg;
+        }
+
+        return LLMResponse(text: '', isError: true, error: friendlyMessage);
+      }
+    } catch (e) {
+      if (retries > 0 && e.toString().contains('SocketException')) {
+        await Future.delayed(Duration(milliseconds: initialRetryDelayMs));
+        return _generateResearchWithModel(prompt, modelName, retries - 1);
+      }
+      return LLMResponse(text: '', isError: true, error: e.toString());
+    }
   }
 }

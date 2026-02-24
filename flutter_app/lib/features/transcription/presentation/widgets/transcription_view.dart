@@ -28,6 +28,9 @@ class TranscriptionView extends ConsumerStatefulWidget {
   final String? emailDraft;
   final String? questions;
   final String? discussionPoints;
+  final String? researchResults;
+  final String? researchRecommendations;
+  final String? researchComments;
   final VoidCallback? onSwitchToSummaryTab;
 
   const TranscriptionView({
@@ -50,6 +53,9 @@ class TranscriptionView extends ConsumerStatefulWidget {
     this.emailDraft,
     this.questions,
     this.discussionPoints,
+    this.researchResults,
+    this.researchRecommendations,
+    this.researchComments,
     this.onSwitchToSummaryTab,
   });
 
@@ -62,6 +68,36 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
   final Map<String, bool> _actionItemStates = {};
   final Map<String, bool?> _decisionApprovals = {};
   bool _loadedStoredAnalysis = false;
+  bool _performResearch = false;
+  final ScrollController _tabScrollController = ScrollController();
+  bool _showLeftArrow = false;
+  bool _showRightArrow = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabScrollController.addListener(_updateScrollArrows);
+  }
+
+  @override
+  void dispose() {
+    _tabScrollController.removeListener(_updateScrollArrows);
+    _tabScrollController.dispose();
+    super.dispose();
+  }
+
+  void _updateScrollArrows() {
+    if (!_tabScrollController.hasClients) return;
+    final position = _tabScrollController.position;
+    final showLeft = position.pixels > 0;
+    final showRight = position.pixels < position.maxScrollExtent;
+    if (showLeft != _showLeftArrow || showRight != _showRightArrow) {
+      setState(() {
+        _showLeftArrow = showLeft;
+        _showRightArrow = showRight;
+      });
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -89,6 +125,9 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
                 emailDraft: widget.emailDraft ?? '',
                 questions: widget.questions ?? '',
                 discussionPoints: widget.discussionPoints ?? '',
+                researchResults: widget.researchResults ?? '',
+                researchRecommendations: widget.researchRecommendations ?? '',
+                researchComments: widget.researchComments ?? '',
               );
         }
       });
@@ -115,6 +154,9 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
       dates: widget.dates ?? '',
       graphData: widget.graphData ?? '',
       emailDraft: widget.emailDraft ?? '',
+      researchResults: widget.researchResults ?? '',
+      researchRecommendations: widget.researchRecommendations ?? '',
+      researchComments: widget.researchComments ?? '',
     );
   }
 
@@ -124,20 +166,9 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
     final meeting = meetings.where((m) => m.id == widget.meetingId).firstOrNull;
     if (meeting == null) return;
 
-    final actionItems = report.actionItems
-        .split('\n')
-        .where((l) => l.trim().isNotEmpty)
-        .toList()
-        .asMap()
-        .entries
-        .map(
-          (e) => ActionItem(
-            id: e.key.toString(),
-            text: e.value.replaceFirst(RegExp(r'^- ?\[.?\] ?'), ''),
-            isCompleted: e.value.contains('[x]'),
-          ),
-        )
-        .toList();
+    final actionItems = ActionItemsHelper.parseFromJsonString(
+      report.actionItems,
+    );
 
     final dates = report.parsedDates
         .map(
@@ -168,6 +199,15 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
       graphData: report.graphData.isNotEmpty ? report.graphData : null,
       emailDraft: report.emailDraft.isNotEmpty ? report.emailDraft : null,
       isAnalyzed: true,
+      researchResults: report.researchResults.isNotEmpty
+          ? report.researchResults
+          : null,
+      researchRecommendations: report.researchRecommendations.isNotEmpty
+          ? report.researchRecommendations
+          : null,
+      researchComments: report.researchComments.isNotEmpty
+          ? report.researchComments
+          : null,
     );
 
     await ref.read(meetingsProvider.notifier).updateMeeting(updatedMeeting);
@@ -222,6 +262,11 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
         showAsAnalyzed && report != null && _hasContent(report.tags);
     final hasParticipants =
         showAsAnalyzed && report != null && _hasContent(report.participants);
+    final hasResearch =
+        showAsAnalyzed &&
+        report != null &&
+        (_hasContent(report.researchResults) ||
+            _hasContent(report.researchRecommendations));
 
     final tabs = <_TabItem>[_TabItem(title: 'Transcript', icon: Icons.article)];
     if (showAsAnalyzed) {
@@ -232,6 +277,8 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
       if (hasSuggestions)
         tabs.add(_TabItem(title: 'Suggestions', icon: Icons.lightbulb_outline));
       if (hasDates) tabs.add(_TabItem(title: 'Dates', icon: Icons.event));
+      if (hasResearch)
+        tabs.add(_TabItem(title: 'Research', icon: Icons.search));
       if (hasKeyTakeaways ||
           hasTopic ||
           hasTags ||
@@ -248,23 +295,123 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
 
     return Column(
       children: [
-        // Tab selector - 2 row layout
+        // Horizontal scrollable tabs at top
         if (tabs.length > 1)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: List.generate(tabs.length, (index) {
-                final tab = tabs[index];
-                final isSelected = index == _selectedTab;
-                return ChoiceChip(
-                  label: Text(tab.title),
-                  selected: isSelected,
-                  onSelected: (_) => setState(() => _selectedTab = index),
-                  avatar: Icon(tab.icon, size: 18),
-                );
-              }),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox(
+                height: 48,
+                child: Stack(
+                  children: [
+                    ListView.builder(
+                      controller: _tabScrollController,
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      itemCount: tabs.length,
+                      itemBuilder: (context, index) {
+                        final tab = tabs[index];
+                        final isSelected = index == _selectedTab;
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedTab = index),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.transparent,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  tab.icon,
+                                  size: 18,
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Colors.grey.shade600,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  tab.title,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                    color: isSelected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    // Left fade indicator
+                    if (_showLeftArrow)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 24,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).colorScheme.surface,
+                                Theme.of(
+                                  context,
+                                ).colorScheme.surface.withOpacity(0),
+                              ],
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.chevron_left,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    // Right fade indicator
+                    if (_showRightArrow)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 24,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(
+                                  context,
+                                ).colorScheme.surface.withOpacity(0),
+                                Theme.of(context).colorScheme.surface,
+                              ],
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.chevron_right,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
 
@@ -272,9 +419,7 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
         Expanded(
           child: isAnalyzing
               ? _buildAnalyzingState(context)
-              : _selectedTab == 0
-              ? _buildTranscriptTab(context, ref, showAsAnalyzed, tabs.length)
-              : _buildAnalysisTab(context, report, tabs[_selectedTab].title),
+              : _buildCurrentTabContent(report, tabs),
         ),
 
         // Error banner
@@ -315,34 +460,58 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
               ],
             ),
             child: SafeArea(
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(child: _buildCompactPersonaDropdown(context, ref)),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    onPressed: isAnalyzing
-                        ? null
-                        : () {
-                            ref.read(meetingAnalysisProvider.notifier).reset();
-                            ref
-                                .read(meetingAnalysisProvider.notifier)
-                                .analyzeMeeting(widget.transcription);
-                          },
-                    icon: Icon(
-                      isAnalyzing ? Icons.hourglass_empty : Icons.psychology,
-                      size: 20,
-                    ),
-                    label: Text(
-                      isAnalyzing
-                          ? 'Analyzing...'
-                          : (showAsAnalyzed ? 'Re-analyze' : 'Analyze'),
-                    ),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildCompactPersonaDropdown(context, ref),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: isAnalyzing
+                            ? null
+                            : () => _handleAnalyze(ref),
+                        icon: Icon(
+                          isAnalyzing
+                              ? Icons.hourglass_empty
+                              : Icons.psychology,
+                          size: 20,
+                        ),
+                        label: Text(
+                          isAnalyzing
+                              ? 'Analyzing...'
+                              : (showAsAnalyzed ? 'Re-analyze' : 'Analyze'),
+                        ),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _performResearch,
+                        onChanged: (value) {
+                          setState(() => _performResearch = value ?? false);
+                        },
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() => _performResearch = !_performResearch);
+                        },
+                        child: Text(
+                          'Perform research (web search)',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -386,6 +555,22 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
         ),
       ),
     );
+  }
+
+  void _handleAnalyze(WidgetRef ref) {
+    final currentReport = ref.read(meetingAnalysisProvider).report;
+
+    ref.read(meetingAnalysisProvider.notifier).reset();
+
+    if (_performResearch) {
+      ref
+          .read(meetingAnalysisProvider.notifier)
+          .researchTopics(widget.transcription, existingReport: currentReport);
+    } else {
+      ref
+          .read(meetingAnalysisProvider.notifier)
+          .analyzeMeeting(widget.transcription);
+    }
   }
 
   bool _hasContent(String? content) {
@@ -502,18 +687,77 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
     );
   }
 
+  Widget _buildCurrentTabContent(MeetingReport? report, List<_TabItem> tabs) {
+    if (_selectedTab == 0) {
+      return _buildTranscriptTab(
+        context,
+        ref,
+        report != null && report.summary.isNotEmpty,
+        tabs.length,
+      );
+    }
+    return _buildAnalysisTab(context, report, tabs[_selectedTab].title);
+  }
+
   Widget _buildAnalysisTab(
     BuildContext context,
     MeetingReport? report,
     String tabTitle,
   ) {
     if (report == null) return const SizedBox();
+
+    final content = _buildTabContent(report, tabTitle);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            tabTitle,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(child: content),
+      ],
+    );
+  }
+
+  Widget _buildTabContent(MeetingReport report, String tabTitle) {
     if (tabTitle == 'Tasks') return _buildTasksTab(context, report);
     if (tabTitle == 'Decisions') return _buildDecisionsTab(context, report);
     if (tabTitle == 'Suggestions') return _buildSuggestionsTab(context, report);
     if (tabTitle == 'Dates') return _buildDatesTab(context, report);
+    if (tabTitle == 'Research') return _buildResearchTab(context, report);
     if (tabTitle == 'Summary') return _buildSummaryTab(context, report);
     return _buildDetailsTab(context, report);
+  }
+
+  Widget _buildResearchTab(BuildContext context, MeetingReport report) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_hasContent(report.researchResults))
+            _buildContentCard(
+              context,
+              'Research Findings',
+              report.researchResults,
+            ),
+          if (_hasContent(report.researchRecommendations))
+            _buildContentCard(
+              context,
+              'Recommendations',
+              report.researchRecommendations,
+            ),
+          if (_hasContent(report.researchComments))
+            _buildContentCard(context, 'Comments', report.researchComments),
+        ],
+      ),
+    );
   }
 
   Widget _buildTasksTab(BuildContext context, MeetingReport report) {
@@ -523,38 +767,35 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
         child: Text('No tasks', style: TextStyle(color: Colors.grey.shade600)),
       );
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final isCompleted = _actionItemStates[item.id] ?? item.isCompleted;
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: Checkbox(
-              value: isCompleted,
-              onChanged: (v) =>
-                  setState(() => _actionItemStates[item.id] = v ?? false),
-            ),
-            title: Text(
-              item.text,
-              style: TextStyle(
-                decoration: isCompleted ? TextDecoration.lineThrough : null,
-                color: isCompleted ? Colors.grey : null,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        children: items.map((item) {
+          final isCompleted = _actionItemStates[item.id] ?? item.isCompleted;
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: Checkbox(
+                value: isCompleted,
+                onChanged: (v) =>
+                    setState(() => _actionItemStates[item.id] = v ?? false),
+              ),
+              title: Text(
+                item.text,
+                style: TextStyle(
+                  decoration: isCompleted ? TextDecoration.lineThrough : null,
+                  color: isCompleted ? Colors.grey : null,
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        }).toList(),
+      ),
     );
   }
 
   Widget _buildDecisionsTab(BuildContext context, MeetingReport report) {
-    final decisions = report.decisions
-        .split('\n')
-        .where((d) => d.trim().isNotEmpty)
-        .toList();
+    final decisions = _parseList(report.decisions);
     if (decisions.isEmpty)
       return Center(
         child: Text(
@@ -563,67 +804,68 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
         ),
       );
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: decisions.length,
-      itemBuilder: (context, index) {
-        final decision = decisions[index].replaceFirst(RegExp(r'^[-*] ?'), '');
-        final decisionId = 'd_$index';
-        final approval = _decisionApprovals[decisionId];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        children: decisions.asMap().entries.map((entry) {
+          final decision = entry.value;
+          final decisionId = 'd_${entry.key}';
+          final approval = _decisionApprovals[decisionId];
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(decision, style: Theme.of(context).textTheme.bodyLarge),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => setState(
-                          () => _decisionApprovals[decisionId] = true,
-                        ),
-                        icon: const Icon(Icons.thumb_up, size: 18),
-                        label: const Text('Approve'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: approval == true
-                              ? Colors.white
-                              : Colors.green,
-                          backgroundColor: approval == true
-                              ? Colors.green
-                              : null,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => setState(
-                          () => _decisionApprovals[decisionId] = false,
-                        ),
-                        icon: const Icon(Icons.thumb_down, size: 18),
-                        label: const Text('Reject'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: approval == false
-                              ? Colors.white
-                              : Colors.red,
-                          backgroundColor: approval == false
-                              ? Colors.red
-                              : null,
+          return Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(decision, style: Theme.of(context).textTheme.bodyLarge),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => setState(
+                            () => _decisionApprovals[decisionId] = true,
+                          ),
+                          icon: const Icon(Icons.thumb_up, size: 18),
+                          label: const Text('Approve'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: approval == true
+                                ? Colors.white
+                                : Colors.green,
+                            backgroundColor: approval == true
+                                ? Colors.green
+                                : null,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => setState(
+                            () => _decisionApprovals[decisionId] = false,
+                          ),
+                          icon: const Icon(Icons.thumb_down, size: 18),
+                          label: const Text('Reject'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: approval == false
+                                ? Colors.white
+                                : Colors.red,
+                            backgroundColor: approval == false
+                                ? Colors.red
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        }).toList(),
+      ),
     );
   }
 
