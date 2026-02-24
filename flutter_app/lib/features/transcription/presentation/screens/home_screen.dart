@@ -124,8 +124,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(height: 24),
           _buildStatusText(context, transcriptionState),
           const SizedBox(height: 16),
-          _buildTipCard(context),
-          const SizedBox(height: 16),
           if (isCompleted) ...[
             FilledButton.icon(
               onPressed: () {
@@ -137,13 +135,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 8),
           ],
-          Text(
-            'Note: Speech recognition works best on a real device',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
           const Spacer(),
         ],
       ),
@@ -275,52 +266,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           },
         );
       },
-    );
-  }
-
-  static const List<String> _tips = [
-    'Tap the microphone to start recording your meeting',
-    'Select a persona (General, Developer, PM, or Exec) before analyzing for tailored insights',
-    'Swipe left on a meeting to delete it',
-    'All your todos from all meetings are collected in the Todos tab',
-    'Export meeting dates directly to your calendar',
-    'Review suggested improvements and accept or decline them',
-  ];
-
-  Widget _buildTipCard(BuildContext context) {
-    final tip = _tips[DateTime.now().day % _tips.length];
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade200),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.lightbulb_outline, color: Colors.orange.shade700),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Tip',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.orange.shade900,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  tip,
-                  style: TextStyle(fontSize: 13, color: Colors.orange.shade800),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

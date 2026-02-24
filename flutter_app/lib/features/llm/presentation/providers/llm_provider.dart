@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
 import '../../data/repositories/llm_service.dart';
@@ -292,24 +293,40 @@ class MeetingReport {
   }
 
   factory MeetingReport.fromJson(Map<String, dynamic> json) {
+    String _toString(dynamic value) {
+      if (value == null) return '';
+      if (value is String) return value;
+      if (value is List)
+        return value.map((e) => e.toString()).toList().toString();
+      return value.toString();
+    }
+
+    String _listToJsonString(dynamic value) {
+      if (value == null) return '';
+      if (value is String) return value;
+      if (value is List)
+        return jsonEncode(value.map((e) => e.toString()).toList());
+      return value.toString();
+    }
+
     return MeetingReport(
-      title: json['title'] ?? '',
-      tagline: json['tagline'] ?? '',
-      overview: json['summary'] ?? '',
-      participants: json['participants'] ?? '',
-      tags: json['tags'] ?? '',
-      topic: json['topic'] ?? '',
-      summary: json['summary'] ?? '',
-      keyTakeaways: json['keyTakeaways'] ?? '',
-      agendaItems: json['agendaItems'] ?? '',
-      discussionPoints: json['discussionPoints'] ?? '',
-      questions: json['questions'] ?? '',
-      decisions: json['decisions'] ?? '',
-      suggestions: json['suggestions'] ?? '',
-      actionItems: json['actionItems'] ?? '',
-      dates: json['dates'] ?? '',
-      graphData: json['graphData'] ?? '',
-      emailDraft: json['emailDraft'] ?? '',
+      title: _toString(json['title']),
+      tagline: _toString(json['tagline']),
+      overview: _toString(json['summary']),
+      participants: _toString(json['participants']),
+      tags: _listToJsonString(json['tags']),
+      topic: _toString(json['topic']),
+      summary: _toString(json['summary']),
+      keyTakeaways: _listToJsonString(json['keyTakeaways']),
+      agendaItems: _listToJsonString(json['agendaItems']),
+      discussionPoints: _listToJsonString(json['discussionPoints']),
+      questions: _listToJsonString(json['questions']),
+      decisions: _listToJsonString(json['decisions']),
+      suggestions: _listToJsonString(json['suggestions']),
+      actionItems: _listToJsonString(json['actionItems']),
+      dates: _toString(json['dates']),
+      graphData: _toString(json['graphData']),
+      emailDraft: _toString(json['emailDraft']),
     );
   }
 }
