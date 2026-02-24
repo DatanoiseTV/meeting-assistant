@@ -843,11 +843,31 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: content));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Copied to clipboard'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  tooltip: 'Copy',
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             ...items.map(
@@ -1012,11 +1032,49 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
   }
 
   List<String> _parseList(String text) {
+    if (text.isEmpty) return [];
+
+    // If it looks like a JSON array, try to parse it
+    if (text.trim().startsWith('[')) {
+      try {
+        final cleaned = text.trim();
+        if (cleaned.startsWith('[') && cleaned.endsWith(']')) {
+          final inner = cleaned.substring(1, cleaned.length - 1);
+          final result = <String>[];
+          var current = StringBuffer();
+          var inQuote = false;
+          var escape = false;
+
+          for (var i = 0; i < inner.length; i++) {
+            final c = inner[i];
+            if (escape) {
+              current.write(c);
+              escape = false;
+            } else if (c == '\\') {
+              escape = true;
+            } else if (c == '"') {
+              inQuote = !inQuote;
+            } else if (c == ',' && !inQuote) {
+              result.add(current.toString().trim());
+              current = StringBuffer();
+            } else {
+              current.write(c);
+            }
+          }
+          if (current.isNotEmpty) {
+            result.add(current.toString().trim());
+          }
+          if (result.isNotEmpty) return result;
+        }
+      } catch (_) {}
+    }
+
+    // Fallback: split by newlines and remove dashes/bullets
     return text
         .split('\n')
         .map((l) => l.trim())
         .where((l) => l.isNotEmpty)
-        .map((l) => l.replaceFirst(RegExp(r'^[-*] ?'), ''))
+        .map((l) => l.replaceFirst(RegExp(r'^[-*•] ?'), ''))
         .toList();
   }
 
