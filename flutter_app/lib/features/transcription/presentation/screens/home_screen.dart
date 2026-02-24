@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
+import '../../../llm/presentation/providers/llm_provider.dart';
 import '../providers/providers.dart';
 import '../providers/meetings_provider.dart';
 import '../widgets/record_button.dart';
@@ -652,6 +653,7 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(meetingsProvider.notifier).loadMeetings();
+      ref.read(meetingAnalysisProvider.notifier).reset();
     });
   }
 

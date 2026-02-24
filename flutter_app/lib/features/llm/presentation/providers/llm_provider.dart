@@ -417,10 +417,16 @@ Please analyze the following meeting transcription and provide a structured repo
 
 $transcription
 
-CRITICAL: For ACTION_ITEMS and SUGGESTIONS sections you MUST output ONLY a valid JSON array with NO bullet points, NO dashes. Example format: ["task one", "task two", "task three"]
+OUTPUT FORMAT REQUIREMENTS:
+- ACTION_ITEMS: JSON array only, NO dashes/bullets. Example: ["Complete code review", "Send email"]
+- SUGGESTIONS: JSON array only. Example: ["Consider using async", "Add tests"]
+- KEY_TAKEAWAYS: JSON array only. Example: ["First insight", "Second insight"]
+- DECISIONS: JSON array only. Example: ["Approved budget", "Postponed launch"]
+- QUESTIONS: JSON array only. Example: ["Question 1", "Question 2"]
+- TAGLINE: One line only, max 10 words
 
-GRAPH_DATA format: node1->node2;node2->node3 (semicolon separated)
-DATES format: date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description
+GRAPH_DATA: node1->node2;node2->node3 (semicolon separated)
+DATES: date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description (one per line)
 
 ---PARTICIPANTS---
 ---TAGS---

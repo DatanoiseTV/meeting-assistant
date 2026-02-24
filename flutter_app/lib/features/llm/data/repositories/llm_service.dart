@@ -77,18 +77,21 @@ All fields should be strings.''';
     "participants": {"type": "string", "description": "Comma-separated list or bullet points"},
     "tags": {"type": "string", "description": "Bullet points or comma-separated"},
     "title": {"type": "string", "description": "Short title"},
+    "tagline": {"type": "string", "description": "Very short one-line summary (max 10 words)"},
     "topic": {"type": "string", "description": "Main topic"},
     "summary": {"type": "string", "description": "Brief paragraph"},
-    "keyTakeaways": {"type": "string", "description": "Bullet points with - prefix"},
-    "agendaItems": {"type": "string", "description": "Bullet points with - prefix"},
-    "discussionPoints": {"type": "string", "description": "Bullet points with - prefix"},
-    "questions": {"type": "string", "description": "Bullet points with - prefix"},
-    "decisions": {"type": "string", "description": "Bullet points with - prefix"},
-    "actionItems": {"type": "string", "description": "Bullet points with - prefix"},
+    "keyTakeaways": {"type": "string", "description": "JSON array of strings like [\"item1\", \"item2\"]"},
+    "agendaItems": {"type": "string", "description": "JSON array of strings"},
+    "discussionPoints": {"type": "string", "description": "JSON array of strings"},
+    "questions": {"type": "string", "description": "JSON array of strings"},
+    "decisions": {"type": "string", "description": "JSON array of strings"},
+    "actionItems": {"type": "string", "description": "JSON array of strings like [\"task 1\", \"task 2\"]"},
+    "suggestions": {"type": "string", "description": "JSON array of strings"},
+    "dates": {"type": "string", "description": "date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description format, one per line"},
     "graphData": {"type": "string", "description": "Directed edges in format: node1->node2;node2->node3;etc (semicolon separated)"},
     "emailDraft": {"type": "string", "description": "Professional email with proper formatting"}
   },
-  "required": ["title", "summary", "keyTakeaways"]
+  "required": ["title", "tagline", "summary", "actionItems"]
 }
 ''';
 
