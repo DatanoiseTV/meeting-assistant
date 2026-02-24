@@ -75,21 +75,21 @@ All fields should be strings.''';
   "type": "object",
   "properties": {
     "participants": {"type": "string", "description": "Comma-separated list or bullet points"},
-    "tags": {"type": "string", "description": "Bullet points or comma-separated"},
-    "title": {"type": "string", "description": "Short title"},
+    "tags": {"type": "array", "items": {"type": "string"}, "description": "Array of tags"},
+    "title": {"type": "string", "description": "Short title for the meeting"},
     "tagline": {"type": "string", "description": "Very short one-line summary (max 10 words)"},
-    "topic": {"type": "string", "description": "Main topic"},
-    "summary": {"type": "string", "description": "Brief paragraph"},
-    "keyTakeaways": {"type": "array", "items": {"type": "string"}, "description": "Array of key insights"},
+    "topic": {"type": "string", "description": "Main topic of the meeting"},
+    "summary": {"type": "string", "description": "Brief paragraph summary"},
+    "keyTakeaways": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Array of key insights"},
     "agendaItems": {"type": "array", "items": {"type": "string"}, "description": "Array of agenda items"},
     "discussionPoints": {"type": "array", "items": {"type": "string"}, "description": "Array of discussion points"},
-    "questions": {"type": "array", "items": {"type": "string"}, "description": "Array of questions"},
+    "questions": {"type": "array", "items": {"type": "string"}, "description": "Array of questions raised"},
     "decisions": {"type": "array", "items": {"type": "string"}, "description": "Array of decisions made"},
-    "actionItems": {"type": "array", "items": {"type": "string"}, "description": "Array of action items/tasks"},
+    "actionItems": {"type": "array", "items": {"type": "string"}, "minItems": 1, "description": "Array of action items/tasks"},
     "suggestions": {"type": "array", "items": {"type": "string"}, "description": "Array of suggestions"},
     "dates": {"type": "string", "description": "date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description format, one per line"},
-    "graphData": {"type": "string", "description": "Directed edges in format: node1->node2;node2->node3;etc (semicolon separated)"},
-    "emailDraft": {"type": "string", "description": "Professional email with proper formatting"}
+    "graphData": {"type": "string", "description": "Directed edges: node1->node2;node2->node3 (semicolon separated)"},
+    "emailDraft": {"type": "string", "description": "Professional email draft"}
   },
   "required": ["title", "tagline", "summary", "actionItems"]
 }

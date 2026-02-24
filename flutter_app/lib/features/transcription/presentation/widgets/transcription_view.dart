@@ -67,29 +67,31 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_loadedStoredAnalysis && widget.isAnalyzed) {
-      final analysisState = ref.read(meetingAnalysisProvider);
-      if (analysisState.status != AnalysisStatus.completed) {
-        ref
-            .read(meetingAnalysisProvider.notifier)
-            .loadStoredAnalysis(
-              title: widget.title ?? '',
-              tagline: widget.tagline ?? '',
-              summary: widget.summary ?? '',
-              actionItems: widget.actionItems ?? '',
-              decisions: widget.decisions ?? '',
-              keyTakeaways: widget.keyTakeaways ?? '',
-              topic: widget.topic ?? '',
-              tags: widget.tags ?? '',
-              participants: widget.participants ?? '',
-              suggestions: widget.suggestions ?? '',
-              dates: widget.dates ?? '',
-              graphData: widget.graphData ?? '',
-              emailDraft: widget.emailDraft ?? '',
-              questions: widget.questions ?? '',
-              discussionPoints: widget.discussionPoints ?? '',
-            );
-        _loadedStoredAnalysis = true;
-      }
+      _loadedStoredAnalysis = true;
+      Future.microtask(() {
+        final analysisState = ref.read(meetingAnalysisProvider);
+        if (analysisState.status != AnalysisStatus.completed) {
+          ref
+              .read(meetingAnalysisProvider.notifier)
+              .loadStoredAnalysis(
+                title: widget.title ?? '',
+                tagline: widget.tagline ?? '',
+                summary: widget.summary ?? '',
+                actionItems: widget.actionItems ?? '',
+                decisions: widget.decisions ?? '',
+                keyTakeaways: widget.keyTakeaways ?? '',
+                topic: widget.topic ?? '',
+                tags: widget.tags ?? '',
+                participants: widget.participants ?? '',
+                suggestions: widget.suggestions ?? '',
+                dates: widget.dates ?? '',
+                graphData: widget.graphData ?? '',
+                emailDraft: widget.emailDraft ?? '',
+                questions: widget.questions ?? '',
+                discussionPoints: widget.discussionPoints ?? '',
+              );
+        }
+      });
     }
   }
 

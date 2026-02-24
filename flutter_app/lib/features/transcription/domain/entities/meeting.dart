@@ -218,8 +218,65 @@ class ActionItem {
   };
 
   factory ActionItem.fromJson(Map<String, dynamic> json) => ActionItem(
-    id: json['id'],
-    text: json['text'],
+    id: json['id'] ?? '',
+    text: json['text'] ?? '',
     isCompleted: json['isCompleted'] ?? false,
   );
+}
+
+class ActionItemsHelper {
+  static List<ActionItem> parseFromJsonString(String? jsonString) {
+    if (jsonString == null || jsonString.isEmpty) return [];
+
+    try {
+      if (jsonString.trim().startsWith('[')) {
+        final List<dynamic> items = jsonDecode(jsonString);
+        return items.asMap().entries.map((e) {
+          String text = e.value.toString();
+          bool isCompleted = false;
+          if (text.startsWith('[x]')) {
+            isCompleted = true;
+            text = text.substring(3).trim();
+          } else if (text.startsWith('[ ]')) {
+            text = text.substring(3).trim();
+          }
+          return ActionItem(
+            id: e.key.toString(),
+            text: text,
+            isCompleted: isCompleted,
+          );
+        }).toList();
+      }
+    } catch (_) {}
+
+    final items = <ActionItem>[];
+    for (var i = 0; i < jsonString.split('\n').length; i++) {
+      final line = jsonString.split('\n')[i].trim();
+      if (line.isEmpty) continue;
+      String text = line.replaceFirst(RegExp(r'^- ?'), '');
+      bool isCompleted = text.contains('[x]');
+      text = text.replaceAll(RegExp(r'^\[.?\] ?'), '');
+      items.add(
+        ActionItem(id: i.toString(), text: text, isCompleted: isCompleted),
+      );
+    }
+    return items;
+  }
+
+  static List<String> parseListFromJson(String? jsonString) {
+    if (jsonString == null || jsonString.isEmpty) return [];
+
+    try {
+      if (jsonString.trim().startsWith('[')) {
+        final List<dynamic> items = jsonDecode(jsonString);
+        return items.map((e) => e.toString()).toList();
+      }
+    } catch (_) {}
+
+    return jsonString
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+  }
 }
