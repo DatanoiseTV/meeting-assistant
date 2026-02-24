@@ -413,7 +413,11 @@ Please analyze the following meeting transcription and provide a structured repo
 
 $transcription
 
-Generate the report with these exact section headers. For ACTION_ITEMS and SUGGESTIONS, output as a JSON array with one item per line: ["task 1", "task 2", "task 3"]. For GRAPH_DATA, use format: node1->node2;node2->node3;etc (semicolon separated directed edges showing meeting flow). For DATES, use format: date:YYYY-MM-DD|time:HH:MM|title:Event Title|desc:Optional description (one per line):
+IMPORTANT: For ACTION_ITEMS and SUGGESTIONS sections, you MUST output ONLY a valid JSON array of strings with NO bullet points, NO dashes, NO numbering. Just pure JSON like: ["first task", "second task", "third task"]
+
+For GRAPH_DATA use format: node1->node2;node2->node3;etc (semicolon separated)
+For DATES use format: date:YYYY-MM-DD|time:HH:MM|title:Event Title|desc:Optional description (one per line)
+
 ---PARTICIPANTS---
 ---TAGS---
 ---TITLE---
