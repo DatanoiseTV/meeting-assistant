@@ -72,6 +72,7 @@ class MeetingAnalysisState {
 
 class MeetingReport {
   final String title;
+  final String tagline;
   final String overview;
   final String participants;
   final String tags;
@@ -90,6 +91,7 @@ class MeetingReport {
 
   const MeetingReport({
     required this.title,
+    required this.tagline,
     required this.overview,
     required this.participants,
     required this.tags,
@@ -270,6 +272,7 @@ class MeetingReport {
 
     return MeetingReport(
       title: extract('TITLE'),
+      tagline: extract('TAGLINE'),
       overview: extract('OVERVIEW_SUMMARY'),
       participants: extract('PARTICIPANTS'),
       tags: extract('TAGS'),
@@ -291,6 +294,7 @@ class MeetingReport {
   factory MeetingReport.fromJson(Map<String, dynamic> json) {
     return MeetingReport(
       title: json['title'] ?? '',
+      tagline: json['tagline'] ?? '',
       overview: json['summary'] ?? '',
       participants: json['participants'] ?? '',
       tags: json['tags'] ?? '',
@@ -413,14 +417,15 @@ Please analyze the following meeting transcription and provide a structured repo
 
 $transcription
 
-IMPORTANT: For ACTION_ITEMS and SUGGESTIONS sections, you MUST output ONLY a valid JSON array of strings with NO bullet points, NO dashes, NO numbering. Just pure JSON like: ["first task", "second task", "third task"]
+CRITICAL: For ACTION_ITEMS and SUGGESTIONS sections you MUST output ONLY a valid JSON array with NO bullet points, NO dashes. Example format: ["task one", "task two", "task three"]
 
-For GRAPH_DATA use format: node1->node2;node2->node3;etc (semicolon separated)
-For DATES use format: date:YYYY-MM-DD|time:HH:MM|title:Event Title|desc:Optional description (one per line)
+GRAPH_DATA format: node1->node2;node2->node3 (semicolon separated)
+DATES format: date:YYYY-MM-DD|time:HH:MM|title:Event|desc:Description
 
 ---PARTICIPANTS---
 ---TAGS---
 ---TITLE---
+---TAGLINE---
 ---TOPIC---
 ---YAML_SUMMARY---
 ---OVERVIEW_SUMMARY---
@@ -443,6 +448,7 @@ For DATES use format: date:YYYY-MM-DD|time:HH:MM|title:Event Title|desc:Optional
   void loadStoredAnalysis({
     required String title,
     required String summary,
+    required String tagline,
     required String actionItems,
     required String decisions,
     required String keyTakeaways,
@@ -458,6 +464,7 @@ For DATES use format: date:YYYY-MM-DD|time:HH:MM|title:Event Title|desc:Optional
   }) {
     final report = MeetingReport(
       title: title,
+      tagline: tagline,
       overview: summary,
       participants: participants,
       tags: tags,

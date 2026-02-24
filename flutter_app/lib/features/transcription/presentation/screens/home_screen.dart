@@ -709,10 +709,11 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
         isAnalyzed: meeting.isAnalyzed,
         meetingId: meeting.id,
         title: meeting.title,
+        tagline: meeting.tagline,
         summary: meeting.summary,
-        actionItems: meeting.actionItems
-            .map((e) => '- [${e.isCompleted ? 'x' : ' '}] ${e.text}')
-            .join('\n'),
+        actionItems: meeting.actionItems.isEmpty
+            ? '[]'
+            : '["${meeting.actionItems.map((e) => '${e.isCompleted ? '[x] ' : '[ ] '}${e.text.replaceAll('"', '\\"')}').join('", "')}"]',
         decisions: meeting.decisions,
         suggestions: meeting.suggestions,
         dates: meeting.dates

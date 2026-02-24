@@ -14,6 +14,7 @@ class TranscriptionView extends ConsumerStatefulWidget {
   final bool isAnalyzed;
   final String? meetingId;
   final String? title;
+  final String? tagline;
   final String? summary;
   final String? actionItems;
   final String? decisions;
@@ -35,6 +36,7 @@ class TranscriptionView extends ConsumerStatefulWidget {
     this.isAnalyzed = false,
     this.meetingId,
     this.title,
+    this.tagline,
     this.summary,
     this.actionItems,
     this.decisions,
@@ -71,6 +73,7 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
             .read(meetingAnalysisProvider.notifier)
             .loadStoredAnalysis(
               title: widget.title ?? '',
+              tagline: widget.tagline ?? '',
               summary: widget.summary ?? '',
               actionItems: widget.actionItems ?? '',
               decisions: widget.decisions ?? '',
@@ -94,6 +97,7 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
     if (!widget.isAnalyzed) return null;
     return MeetingReport(
       title: widget.title ?? '',
+      tagline: widget.tagline ?? '',
       overview: widget.summary ?? '',
       participants: widget.participants ?? '',
       tags: widget.tags ?? '',
@@ -242,27 +246,23 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
 
     return Column(
       children: [
-        // Tab selector
+        // Tab selector - 2 row layout
         if (tabs.length > 1)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(tabs.length, (index) {
-                  final tab = tabs[index];
-                  final isSelected = index == _selectedTab;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(tab.title),
-                      selected: isSelected,
-                      onSelected: (_) => setState(() => _selectedTab = index),
-                      avatar: Icon(tab.icon, size: 18),
-                    ),
-                  );
-                }),
-              ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: List.generate(tabs.length, (index) {
+                final tab = tabs[index];
+                final isSelected = index == _selectedTab;
+                return ChoiceChip(
+                  label: Text(tab.title),
+                  selected: isSelected,
+                  onSelected: (_) => setState(() => _selectedTab = index),
+                  avatar: Icon(tab.icon, size: 18),
+                );
+              }),
             ),
           ),
 
@@ -915,7 +915,9 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
     }
 
     final builder = SugiyamaConfiguration()
-      ..bendPointShape = CurvedBendPointShape(curveLength: 20);
+      ..bendPointShape = CurvedBendPointShape(curveLength: 15)
+      ..levelSeparation = 50
+      ..nodeSeparation = 20;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -941,18 +943,14 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
               ],
             ),
             const SizedBox(height: 12),
-            Container(
+            SizedBox(
               width: double.infinity,
-              height: 250,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              height: nodes.length > 5 ? 350 : 200,
               child: InteractiveViewer(
                 constrained: false,
-                boundaryMargin: const EdgeInsets.all(100),
-                minScale: 0.1,
-                maxScale: 3.0,
+                boundaryMargin: const EdgeInsets.all(50),
+                minScale: 0.3,
+                maxScale: 2.0,
                 child: GraphView(
                   graph: graph,
                   algorithm: SugiyamaAlgorithm(builder),
@@ -975,18 +973,18 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
 
   Widget _buildGraphNode(BuildContext context, String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.orange.shade100,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange.shade700, width: 2),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.orange.shade700, width: 1.5),
       ),
       child: Text(
         label,
         style: TextStyle(
           color: Colors.orange.shade900,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          fontSize: 11,
         ),
       ),
     );

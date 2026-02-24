@@ -7,6 +7,7 @@ class Meeting {
   final String? language;
   final String transcription;
   final String? title;
+  final String? tagline;
   final String? summary;
   final String? participants;
   final String? tags;
@@ -30,6 +31,7 @@ class Meeting {
     this.language,
     required this.transcription,
     this.title,
+    this.tagline,
     this.summary,
     this.participants,
     this.tags,
@@ -64,6 +66,7 @@ class Meeting {
     String? language,
     String? transcription,
     String? title,
+    String? tagline,
     String? summary,
     String? participants,
     String? tags,
@@ -87,6 +90,7 @@ class Meeting {
       language: language ?? this.language,
       transcription: transcription ?? this.transcription,
       title: title ?? this.title,
+      tagline: tagline ?? this.tagline,
       summary: summary ?? this.summary,
       participants: participants ?? this.participants,
       tags: tags ?? this.tags,
@@ -112,6 +116,7 @@ class Meeting {
     'language': language,
     'transcription': transcription,
     'title': title,
+    'tagline': tagline,
     'summary': summary,
     'participants': participants,
     'tags': tags,
@@ -136,6 +141,7 @@ class Meeting {
     language: json['language'],
     transcription: json['transcription'],
     title: json['title'],
+    tagline: json['tagline'],
     summary: json['summary'],
     participants: json['participants'],
     tags: json['tags'],
