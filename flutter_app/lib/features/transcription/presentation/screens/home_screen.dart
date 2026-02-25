@@ -105,65 +105,408 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildRecordView(BuildContext context) {
     final transcriptionState = ref.watch(transcriptionProvider);
+    final meetings = ref.watch(meetingsProvider);
+    final isRecording =
+        transcriptionState.status == TranscriptionStatus.recording;
     final isCompleted =
         transcriptionState.status == TranscriptionStatus.completed;
 
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: MediaQuery.of(context).size.height - 200,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              Text(
-                'Meeting Assistant',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+    final totalMeetings = meetings.length;
+    final analyzedMeetings = meetings.where((m) => m.isAnalyzed).length;
+    final totalTasks = meetings.fold<int>(
+      0,
+      (sum, m) => sum + m.actionItems.length,
+    );
+    final completedTasks = meetings.fold<int>(
+      0,
+      (sum, m) => sum + m.actionItems.where((a) => a.isCompleted).length,
+    );
+    final recentMeetings = meetings.take(3).toList();
+
+    return CustomScrollView(
+      slivers: [
+        // Hero Section
+        SliverToBoxAdapter(
+          child: Container(
+            margin: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Record your meetings and get AI-powered insights',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-              RecordButton(state: transcriptionState),
-              const SizedBox(height: 24),
-              _buildStatusText(context, transcriptionState),
-              const SizedBox(height: 16),
-              if (isCompleted) ...[
-                FilledButton.icon(
-                  onPressed: () {
-                    ref.read(transcriptionProvider.notifier).reset();
-                    setState(() => _selectedIndex = 1);
-                  },
-                  icon: const Icon(Icons.visibility),
-                  label: const Text('View Meeting'),
+              ],
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 20),
+                Text(
+                  'Meeting Assistant',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 8),
+                Text(
+                  isRecording
+                      ? 'Recording in progress...'
+                      : isCompleted
+                      ? 'Recording complete!'
+                      : 'Record your meetings and get AI-powered insights',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                // Animated Record Button
+                GestureDetector(
+                  onTap: () {
+                    if (transcriptionState.status == TranscriptionStatus.idle) {
+                      ref.read(transcriptionProvider.notifier).startRecording();
+                    } else if (isRecording) {
+                      ref.read(transcriptionProvider.notifier).stopRecording();
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: isRecording ? 80 : 100,
+                    height: isRecording ? 80 : 100,
+                    decoration: BoxDecoration(
+                      color: isRecording ? Colors.red : Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isRecording ? Colors.red : Colors.white)
+                              .withOpacity(0.3),
+                          blurRadius: isRecording ? 30 : 20,
+                          spreadRadius: isRecording ? 10 : 5,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      isRecording ? Icons.stop : Icons.mic,
+                      size: isRecording ? 40 : 48,
+                      color: isRecording
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Status Text
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _getStatusText(transcriptionState.status),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (isCompleted) ...[
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () {
+                      ref.read(transcriptionProvider.notifier).reset();
+                      setState(() => _selectedIndex = 1);
+                    },
+                    icon: const Icon(Icons.visibility),
+                    label: const Text('View Meeting'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: () {
+                    ref
+                        .read(transcriptionProvider.notifier)
+                        .importTranscriptFromFile();
+                  },
+                  icon: const Icon(Icons.upload_file, color: Colors.white),
+                  label: const Text(
+                    'Import from file',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 20),
               ],
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: () {
-                  ref
-                      .read(transcriptionProvider.notifier)
-                      .importTranscriptFromFile();
-                },
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Import from file'),
-              ),
-            ],
+            ),
           ),
+        ),
+
+        // Quick Stats
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    context,
+                    Icons.article,
+                    '$totalMeetings',
+                    'Meetings',
+                    Colors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    context,
+                    Icons.psychology,
+                    '$analyzedMeetings',
+                    'Analyzed',
+                    Colors.purple,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildStatCard(
+                    context,
+                    Icons.check_circle,
+                    '$completedTasks/$totalTasks',
+                    'Tasks',
+                    Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Recent Meetings Section
+        if (recentMeetings.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Recent Meetings',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _selectedIndex = 1),
+                    child: const Text('See all'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 140,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: recentMeetings.length,
+                itemBuilder: (context, index) {
+                  final meeting = recentMeetings[index];
+                  return _buildRecentMeetingCard(context, meeting);
+                },
+              ),
+            ),
+          ),
+        ],
+
+        // Empty state for new users
+        if (totalMeetings == 0)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.record_voice_over,
+                    size: 80,
+                    color: Colors.grey.shade300,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No meetings yet',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap the record button to start your first meeting',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
+    );
+  }
+
+  String _getStatusText(TranscriptionStatus status) {
+    switch (status) {
+      case TranscriptionStatus.idle:
+        return 'Tap to start recording';
+      case TranscriptionStatus.recording:
+        return 'Listening...';
+      case TranscriptionStatus.processing:
+        return 'Initializing...';
+      case TranscriptionStatus.transcribing:
+        return 'Processing...';
+      case TranscriptionStatus.completed:
+        return 'Recording complete!';
+      case TranscriptionStatus.error:
+        return 'Error occurred';
+    }
+  }
+
+  Widget _buildStatCard(
+    BuildContext context,
+    IconData icon,
+    String value,
+    String label,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentMeetingCard(BuildContext context, Meeting meeting) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MeetingDetailScreen(meetingId: meeting.id),
+          ),
+        );
+      },
+      child: Container(
+        width: 200,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.article,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const Spacer(),
+                if (meeting.isAnalyzed)
+                  Icon(Icons.check_circle, size: 16, color: Colors.green),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              meeting.title ?? 'Untitled',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatDate(meeting.createdAt),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   Widget _buildStatusText(BuildContext context, TranscriptionState state) {
@@ -225,20 +568,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.folder_open, size: 64, color: Colors.grey.shade400),
-              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer.withOpacity(0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.folder_open,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                ),
+              ),
+              const SizedBox(height: 24),
               Text(
                 'No meetings yet',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(color: Colors.grey.shade700),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Record your first meeting to see it here',
+                'Record your first meeting to get started',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () => setState(() => _selectedIndex = 0),
+                icon: const Icon(Icons.mic),
+                label: const Text('Start Recording'),
               ),
             ],
           ),
@@ -246,21 +610,74 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: meetings.length,
-      itemBuilder: (context, index) {
-        final meeting = meetings[index];
-        final dateFormat = DateFormat('MMM d, yyyy');
-        final timeFormat = DateFormat('h:mm a');
+    return CustomScrollView(
+      slivers: [
+        // Header
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            child: Row(
+              children: [
+                Text(
+                  'All Meetings',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${meetings.length}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
 
-        return _MeetingListItem(
-          meeting: meeting,
-          dateFormat: dateFormat,
-          timeFormat: timeFormat,
-          onTap: () => _openMeeting(context, meeting),
-          onDelete: () async {
-            final confirmed = await showDialog<bool>(
+        // Meetings List
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final meeting = meetings[index];
+              return _buildMeetingCard(context, meeting);
+            }, childCount: meetings.length),
+          ),
+        ),
+
+        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+      ],
+    );
+  }
+
+  Widget _buildMeetingCard(BuildContext context, Meeting meeting) {
+    return Dismissible(
+      key: Key(meeting.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
                 title: const Text('Delete Meeting'),
@@ -279,30 +696,246 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ],
               ),
-            );
-            if (confirmed == true) {
-              ref.read(meetingsProvider.notifier).deleteMeeting(meeting.id);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Meeting deleted')),
-                );
-              }
-            }
-          },
-        );
+            ) ??
+            false;
       },
+      onDismissed: (direction) {
+        ref.read(meetingsProvider.notifier).deleteMeeting(meeting.id);
+      },
+      child: GestureDetector(
+        onTap: () => _openMeeting(context, meeting),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header with icon and status
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: meeting.isAnalyzed
+                      ? Colors.green.withOpacity(0.1)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.primaryContainer.withOpacity(0.3),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: meeting.isAnalyzed
+                            ? Colors.green.withOpacity(0.2)
+                            : Theme.of(
+                                context,
+                              ).colorScheme.primary.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        meeting.isAnalyzed ? Icons.psychology : Icons.mic,
+                        color: meeting.isAnalyzed
+                            ? Colors.green
+                            : Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            meeting.title ?? 'Untitled Meeting',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatDate(meeting.createdAt),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (meeting.isAnalyzed)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.check, size: 12, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text(
+                              'Analyzed',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (meeting.summary != null &&
+                        meeting.summary!.isNotEmpty) ...[
+                      Text(
+                        meeting.summary!,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey.shade700,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Tags and stats row
+                    Row(
+                      children: [
+                        // Tags
+                        if (meeting.tags != null && meeting.tags!.isNotEmpty)
+                          Expanded(
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _parseTags(meeting.tags!)
+                                  .take(3)
+                                  .map(
+                                    (tag) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primaryContainer,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        tag.replaceAll('_', ' '),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimaryContainer,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ),
+
+                        // Stats
+                        if (meeting.actionItems.isNotEmpty) ...[
+                          const Spacer(),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle_outline,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${meeting.actionItems.where((a) => a.isCompleted).length}/${meeting.actionItems.length}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<String> _parseTags(String tags) {
+    try {
+      if (tags.startsWith('[')) {
+        return tags
+            .replaceAll('[', '')
+            .replaceAll(']', '')
+            .split(',')
+            .map((e) => e.trim().replaceAll('"', ''))
+            .toList();
+      }
+    } catch (_) {}
+    return [tags];
+  }
+
+  Widget _buildFilterChip(
+    String label,
+    String value,
+    String selected,
+    Function(String) onSelected,
+  ) {
+    final isSelected = value == selected;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) => onSelected(value),
+      selectedColor: Theme.of(context).colorScheme.primaryContainer,
+      checkmarkColor: Theme.of(context).colorScheme.primary,
     );
   }
 
   Widget _buildSearchView(BuildContext context) {
     final meetings = ref.watch(meetingsProvider);
     final searchController = TextEditingController();
+    String _selectedFilter = 'all';
 
     return StatefulBuilder(
       builder: (context, setSearchState) {
         final query = searchController.text.toLowerCase();
-        final filteredMeetings = query.isEmpty
-            ? <Meeting>[]
+
+        var filteredMeetings = query.isEmpty
+            ? List<Meeting>.from(meetings)
             : meetings.where((m) {
                 final title = m.title?.toLowerCase() ?? '';
                 final summary = m.summary?.toLowerCase() ?? '';
@@ -314,10 +947,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     tags.contains(query);
               }).toList();
 
+        if (_selectedFilter == 'analyzed') {
+          filteredMeetings = filteredMeetings
+              .where((m) => m.isAnalyzed)
+              .toList();
+        } else if (_selectedFilter == 'hasTasks') {
+          filteredMeetings = filteredMeetings
+              .where((m) => m.actionItems.isNotEmpty)
+              .toList();
+        } else if (_selectedFilter == 'thisWeek') {
+          final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+          filteredMeetings = filteredMeetings
+              .where((m) => m.createdAt.isAfter(weekAgo))
+              .toList();
+        } else if (_selectedFilter == 'thisMonth') {
+          final monthAgo = DateTime.now().subtract(const Duration(days: 30));
+          filteredMeetings = filteredMeetings
+              .where((m) => m.createdAt.isAfter(monthAgo))
+              .toList();
+        }
+
         return Column(
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: TextField(
                 controller: searchController,
                 decoration: InputDecoration(
@@ -339,37 +992,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 onChanged: (_) => setSearchState(() {}),
               ),
             ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  _buildFilterChip('All', 'all', _selectedFilter, (val) {
+                    setSearchState(() => _selectedFilter = val);
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Analyzed', 'analyzed', _selectedFilter, (
+                    val,
+                  ) {
+                    setSearchState(() => _selectedFilter = val);
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Has Tasks', 'hasTasks', _selectedFilter, (
+                    val,
+                  ) {
+                    setSearchState(() => _selectedFilter = val);
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('This Week', 'thisWeek', _selectedFilter, (
+                    val,
+                  ) {
+                    setSearchState(() => _selectedFilter = val);
+                  }),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('This Month', 'thisMonth', _selectedFilter, (
+                    val,
+                  ) {
+                    setSearchState(() => _selectedFilter = val);
+                  }),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             Expanded(
-              child: query.isEmpty
+              child: filteredMeetings.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.search,
+                            query.isEmpty && _selectedFilter == 'all'
+                                ? Icons.search
+                                : Icons.search_off,
                             size: 64,
                             color: Colors.grey.shade400,
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Search your meetings',
+                            query.isEmpty && _selectedFilter == 'all'
+                                ? 'Search your meetings'
+                                : 'No results found',
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(color: Colors.grey.shade600),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Find by title, content, or tags',
+                            query.isEmpty && _selectedFilter == 'all'
+                                ? 'Find by title, content, or tags'
+                                : 'Try adjusting your filters',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: Colors.grey),
                           ),
                         ],
-                      ),
-                    )
-                  : filteredMeetings.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No results found',
-                        style: TextStyle(color: Colors.grey.shade600),
                       ),
                     )
                   : ListView.builder(
@@ -445,6 +1133,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     }
 
+    final completedCount = allTodos
+        .where((t) => t.actionItem.isCompleted)
+        .length;
+    final totalCount = allTodos.length;
+    final progress = totalCount > 0 ? completedCount / totalCount : 0.0;
+
     if (allTodos.isEmpty) {
       return Center(
         child: Padding(
@@ -478,25 +1172,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       itemCount: allTodos.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              children: [
-                Text(
-                  'All Todos',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'All Todos',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '$completedCount/$totalCount done',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 8,
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: AlwaysStoppedAnimation(
+                    progress == 1.0
+                        ? Colors.green
+                        : Theme.of(context).colorScheme.primary,
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  '${allTodos.length} items',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 16),
+            ],
           );
         }
 
