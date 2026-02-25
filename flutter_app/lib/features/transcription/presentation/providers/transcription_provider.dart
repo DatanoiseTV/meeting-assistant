@@ -34,22 +34,13 @@ final transcriptionProvider =
       final whisperOfflineService = ref.watch(
         whisperTranscriptionServiceProvider,
       );
-      final settings = ref.watch(settingsProvider);
 
-      String localeId = 'en_US';
-      bool useWhisper = false;
-      settings.whenData((config) {
-        localeId = config.speechLanguage;
-        useWhisper = config.useWhisper;
-      });
-
-      speechService.setLocale(localeId);
-
+      // Pass ref so the notifier can read settings dynamically at call time
       return TranscriptionNotifier(
         speechService,
         audioService,
         whisperOfflineService,
-        useWhisper,
+        ref,
       );
     });
 
@@ -57,15 +48,23 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
   final WhisperService _speechService;
   final AudioRecordingService _audioService;
   final WhisperTranscriptionService _whisperOfflineService;
-  final bool _useWhisper;
+  final Ref _ref;
   DateTime? _recordingStartTime;
 
   TranscriptionNotifier(
     this._speechService,
     this._audioService,
     this._whisperOfflineService,
-    this._useWhisper,
+    this._ref,
   ) : super(const TranscriptionState());
+
+  bool get _useWhisper {
+    return _ref.read(settingsProvider).value?.useWhisper ?? false;
+  }
+
+  String get _localeId {
+    return _ref.read(settingsProvider).value?.speechLanguage ?? 'en_US';
+  }
 
   Future<void> initializeWhisper() async {
     state = state.copyWith(status: TranscriptionStatus.processing);
@@ -102,6 +101,7 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
         await _audioService.startRecording();
       } else {
         // Live mode: stream speech recognition
+        _speechService.setLocale(_localeId);
         await _speechService.initialize();
         await _startLiveSpeechRecognition();
       }
