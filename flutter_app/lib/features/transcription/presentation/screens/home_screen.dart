@@ -110,6 +110,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         transcriptionState.status == TranscriptionStatus.recording;
     final isCompleted =
         transcriptionState.status == TranscriptionStatus.completed;
+    final isTranscribing =
+        transcriptionState.status == TranscriptionStatus.transcribing;
+    final isProcessing =
+        transcriptionState.status == TranscriptionStatus.processing;
+    final isBusy = isTranscribing || isProcessing;
 
     final totalMeetings = meetings.length;
     final analyzedMeetings = meetings.where((m) => m.isAnalyzed).length;
@@ -170,8 +175,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
-                // Animated Record Button
-                GestureDetector(
+
+                // Record button
+                _RecordButton(
+                  isRecording: isRecording,
+                  isBusy: isBusy,
                   onTap: () {
                     if (transcriptionState.status == TranscriptionStatus.idle) {
                       ref.read(transcriptionProvider.notifier).startRecording();
@@ -179,50 +187,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ref.read(transcriptionProvider.notifier).stopRecording();
                     }
                   },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: isRecording ? 80 : 100,
-                    height: isRecording ? 80 : 100,
-                    decoration: BoxDecoration(
-                      color: isRecording ? Colors.red : Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isRecording ? Colors.red : Colors.white)
-                              .withOpacity(0.3),
-                          blurRadius: isRecording ? 30 : 20,
-                          spreadRadius: isRecording ? 10 : 5,
+                ),
+
+                const SizedBox(height: 20),
+
+                // Download progress or status pill
+                if (transcriptionState.isDownloadingModel) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Downloading model... ${(transcriptionState.modelDownloadProgress * 100).toStringAsFixed(0)}%',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: transcriptionState.modelDownloadProgress,
+                            minHeight: 6,
+                            backgroundColor: Colors.white.withOpacity(0.2),
+                            valueColor: const AlwaysStoppedAnimation(
+                              Colors.white,
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    child: Icon(
-                      isRecording ? Icons.stop : Icons.mic,
-                      size: isRecording ? 40 : 48,
-                      color: isRecording
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.primary,
+                  ),
+                ] else ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _getStatusText(transcriptionState),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                // Status Text
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _getStatusText(transcriptionState),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
+                ],
                 if (isCompleted) ...[
                   const SizedBox(height: 16),
                   FilledButton.icon(
@@ -1579,4 +1595,148 @@ class _CombinedTodo {
     required this.meetingId,
     required this.actionItem,
   });
+}
+
+class _RecordButton extends StatefulWidget {
+  final bool isRecording;
+  final bool isBusy;
+  final VoidCallback onTap;
+
+  const _RecordButton({
+    required this.isRecording,
+    required this.isBusy,
+    required this.onTap,
+  });
+
+  @override
+  State<_RecordButton> createState() => _RecordButtonState();
+}
+
+class _RecordButtonState extends State<_RecordButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _pulseAnim = Tween<double>(begin: 1.0, end: 1.35).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    if (widget.isRecording) {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_RecordButton old) {
+    super.didUpdateWidget(old);
+    if (widget.isRecording && !old.isRecording) {
+      _pulseController.repeat(reverse: true);
+    } else if (!widget.isRecording && old.isRecording) {
+      _pulseController.stop();
+      _pulseController.reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isBusy) {
+      return SizedBox(
+        width: 100,
+        height: 100,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 100,
+              height: 100,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Colors.white.withOpacity(0.6),
+              ),
+            ),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.hourglass_top,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: AnimatedBuilder(
+        animation: _pulseAnim,
+        builder: (context, child) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              // Pulsing outer ring (only when recording)
+              if (widget.isRecording)
+                Transform.scale(
+                  scale: _pulseAnim.value,
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.red.withOpacity(
+                          0.6 * (1.0 - (_pulseAnim.value - 1.0) / 0.35),
+                        ),
+                        width: 3,
+                      ),
+                    ),
+                  ),
+                ),
+              // Main button
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                width: widget.isRecording ? 80 : 96,
+                height: widget.isRecording ? 80 : 96,
+                decoration: BoxDecoration(
+                  color: widget.isRecording ? Colors.red : Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (widget.isRecording ? Colors.red : Colors.white)
+                          .withOpacity(0.4),
+                      blurRadius: widget.isRecording ? 24 : 16,
+                      spreadRadius: widget.isRecording ? 6 : 2,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  widget.isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                  size: widget.isRecording ? 38 : 46,
+                  color: widget.isRecording ? Colors.white : Colors.black,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }

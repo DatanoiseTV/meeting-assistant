@@ -33,6 +33,8 @@ class TranscriptionState {
   final String? errorMessage;
   final int progress;
   final int transcribingElapsedSeconds;
+  // Download progress: -1 = not downloading, 0.0-1.0 = downloading
+  final double modelDownloadProgress;
 
   const TranscriptionState({
     this.status = TranscriptionStatus.idle,
@@ -42,7 +44,10 @@ class TranscriptionState {
     this.errorMessage,
     this.progress = 0,
     this.transcribingElapsedSeconds = 0,
+    this.modelDownloadProgress = -1.0,
   });
+
+  bool get isDownloadingModel => modelDownloadProgress >= 0.0;
 
   TranscriptionState copyWith({
     TranscriptionStatus? status,
@@ -52,6 +57,7 @@ class TranscriptionState {
     String? errorMessage,
     int? progress,
     int? transcribingElapsedSeconds,
+    double? modelDownloadProgress,
   }) {
     return TranscriptionState(
       status: status ?? this.status,
@@ -62,6 +68,8 @@ class TranscriptionState {
       progress: progress ?? this.progress,
       transcribingElapsedSeconds:
           transcribingElapsedSeconds ?? this.transcribingElapsedSeconds,
+      modelDownloadProgress:
+          modelDownloadProgress ?? this.modelDownloadProgress,
     );
   }
 }

@@ -187,8 +187,16 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
             _ref.read(settingsProvider).value?.whisperModel ?? 'tiny';
         debugPrint('[Whisper] Using locale: $locale, model: $modelName');
 
-        // Ensure the correct model is initialized (re-init if model changed)
-        await _whisperOfflineService.initialize(modelName: modelName);
+        // Ensure the correct model is initialized (re-init if model changed),
+        // relaying download progress into state so the UI can show a bar.
+        await _whisperOfflineService.initialize(
+          modelName: modelName,
+          onProgress: (p) {
+            if (mounted) {
+              state = state.copyWith(modelDownloadProgress: p);
+            }
+          },
+        );
 
         _startTranscribingTimer();
         try {
