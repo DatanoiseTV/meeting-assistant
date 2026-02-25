@@ -5,7 +5,7 @@ class AppTheme {
 
   static const _primaryColor = Color(0xFF000000);
   static const _accentColor = Color(0xFFFF6B00);
-  static const _surfaceLight = Color(0xFFF5F5F7);
+  static const _surfaceLight = Color(0xFFE8E8ED);
   static const _surfaceDark = Color(0xFF1C1C1E);
 
   static ThemeData get lightTheme {
@@ -35,7 +35,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        color: Colors.white,
+        color: const Color(0xFFF2F2F7),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -60,7 +60,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: const Color(0xFFF2F2F7),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFD1D1D6)),
@@ -79,7 +79,7 @@ class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFE8E8ED),
         indicatorColor: _accentColor.withValues(alpha: 0.2),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {

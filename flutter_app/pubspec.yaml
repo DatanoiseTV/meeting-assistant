@@ -26,6 +26,9 @@ dependencies:
   # Speech recognition (iOS native)
   speech_to_text: ^7.0.0
   
+  # Whisper offline transcription
+  whisper_flutter_new: ^1.0.1
+  
   # HTTP & Networking
   http: ^1.3.0
   
