@@ -90,7 +90,7 @@ class _SettingsScreenContentState extends ConsumerState<SettingsScreenContent> {
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Offline Transcription'),
                         subtitle: const Text(
-                          'Use on-device Whisper model instead of live speech recognition. Downloads ~75 MB on first use.',
+                          'Use on-device Whisper model instead of live speech recognition. Downloads model on first use.',
                         ),
                         secondary: const Icon(Icons.offline_bolt),
                         value: config.useWhisper,
@@ -101,6 +101,14 @@ class _SettingsScreenContentState extends ConsumerState<SettingsScreenContent> {
                               .updateConfig(current.copyWith(useWhisper: val));
                         },
                       ),
+                      if (config.useWhisper) ...[
+                        const Divider(height: 24),
+                        _buildWhisperModelSelector(
+                          context,
+                          ref,
+                          config.whisperModel,
+                        ),
+                      ],
                       const Divider(height: 24),
                       _buildLanguageSelector(
                         context,
@@ -345,6 +353,52 @@ class _SettingsScreenContentState extends ConsumerState<SettingsScreenContent> {
           ref
               .read(settingsProvider.notifier)
               .updateConfig(current.copyWith(speechLanguage: val));
+        }
+      },
+    );
+  }
+
+  static const List<Map<String, String>> _whisperModels = [
+    {'id': 'tiny', 'name': 'Tiny (~75 MB, fastest)'},
+    {'id': 'base', 'name': 'Base (~142 MB, fast)'},
+    {'id': 'small', 'name': 'Small (~466 MB, balanced)'},
+    {'id': 'medium', 'name': 'Medium (~1.5 GB, accurate)'},
+    {'id': 'large-v1', 'name': 'Large v1 (~2.9 GB, best)'},
+    {'id': 'large-v2', 'name': 'Large v2 (~2.9 GB, best)'},
+  ];
+
+  Widget _buildWhisperModelSelector(
+    BuildContext context,
+    WidgetRef ref,
+    String value,
+  ) {
+    final selected = _whisperModels.firstWhere(
+      (m) => m['id'] == value,
+      orElse: () => _whisperModels.first,
+    );
+    return DropdownButtonFormField<String>(
+      value: selected['id'],
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Whisper Model',
+        prefixIcon: const Icon(Icons.memory),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+      ),
+      items: _whisperModels
+          .map(
+            (m) => DropdownMenuItem(
+              value: m['id'],
+              child: Text(m['name']!, overflow: TextOverflow.ellipsis),
+            ),
+          )
+          .toList(),
+      onChanged: (val) {
+        if (val != null) {
+          final current = ref.read(settingsProvider).value!;
+          ref
+              .read(settingsProvider.notifier)
+              .updateConfig(current.copyWith(whisperModel: val));
         }
       },
     );

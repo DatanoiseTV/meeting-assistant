@@ -51,6 +51,7 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
   final WhisperTranscriptionService _whisperOfflineService;
   final Ref _ref;
   DateTime? _recordingStartTime;
+  Timer? _transcribingTimer;
 
   TranscriptionNotifier(
     this._speechService,
@@ -65,6 +66,22 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
 
   String get _localeId {
     return _ref.read(settingsProvider).value?.speechLanguage ?? 'en_US';
+  }
+
+  void _startTranscribingTimer() {
+    _transcribingTimer?.cancel();
+    int elapsed = 0;
+    _transcribingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      elapsed++;
+      if (mounted) {
+        state = state.copyWith(transcribingElapsedSeconds: elapsed);
+      }
+    });
+  }
+
+  void _stopTranscribingTimer() {
+    _transcribingTimer?.cancel();
+    _transcribingTimer = null;
   }
 
   Future<void> initializeWhisper() async {
@@ -166,23 +183,32 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
         }
 
         final locale = _localeId;
-        debugPrint('[Whisper] Using locale: $locale, useWhisper: $_useWhisper');
+        final modelName =
+            _ref.read(settingsProvider).value?.whisperModel ?? 'tiny';
+        debugPrint('[Whisper] Using locale: $locale, model: $modelName');
 
+        // Ensure the correct model is initialized (re-init if model changed)
+        await _whisperOfflineService.initialize(modelName: modelName);
+
+        _startTranscribingTimer();
         try {
           final transcription = await _whisperOfflineService.transcribe(
             audioPath: audioPath,
             language: locale,
           );
+          _stopTranscribingTimer();
           debugPrint('[Whisper] Final transcription: "$transcription"');
           state = state.copyWith(
             status: TranscriptionStatus.completed,
             transcription: transcription,
+            transcribingElapsedSeconds: 0,
           );
           // Clean up audio file after transcription
           try {
             await File(audioPath).delete();
           } catch (_) {}
         } catch (e) {
+          _stopTranscribingTimer();
           debugPrint('[Whisper] stopRecording transcription error: $e');
           state = state.copyWith(
             status: TranscriptionStatus.error,
@@ -288,6 +314,7 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
 
   @override
   void dispose() {
+    _transcribingTimer?.cancel();
     super.dispose();
   }
 }

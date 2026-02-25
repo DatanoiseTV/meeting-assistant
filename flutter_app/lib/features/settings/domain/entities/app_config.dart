@@ -11,6 +11,7 @@ class AppConfig {
   final String speechLanguage;
   final bool enableResearch;
   final bool useWhisper;
+  final String whisperModel;
   final String? githubToken;
   final String? githubRepo;
   final String? gitlabToken;
@@ -32,6 +33,7 @@ class AppConfig {
     this.speechLanguage = 'en_US',
     this.enableResearch = false,
     this.useWhisper = false,
+    this.whisperModel = 'tiny',
     this.githubToken,
     this.githubRepo,
     this.gitlabToken,
@@ -53,6 +55,7 @@ class AppConfig {
     String? speechLanguage,
     bool? enableResearch,
     bool? useWhisper,
+    String? whisperModel,
     String? githubToken,
     String? githubRepo,
     String? gitlabToken,
@@ -73,6 +76,7 @@ class AppConfig {
       speechLanguage: speechLanguage ?? this.speechLanguage,
       enableResearch: enableResearch ?? this.enableResearch,
       useWhisper: useWhisper ?? this.useWhisper,
+      whisperModel: whisperModel ?? this.whisperModel,
       githubToken: githubToken ?? this.githubToken,
       githubRepo: githubRepo ?? this.githubRepo,
       gitlabToken: gitlabToken ?? this.gitlabToken,
@@ -95,6 +99,7 @@ class AppConfig {
     'speech_language': speechLanguage,
     'enable_research': enableResearch,
     'use_whisper': useWhisper,
+    'whisper_model': whisperModel,
     'github_token': githubToken,
     'github_repo': githubRepo,
     'gitlab_token': gitlabToken,
@@ -118,6 +123,7 @@ class AppConfig {
     speechLanguage: json['speech_language'] ?? 'en_US',
     enableResearch: json['enable_research'] ?? false,
     useWhisper: json['use_whisper'] ?? false,
+    whisperModel: json['whisper_model'] ?? 'tiny',
     githubToken: json['github_token'],
     githubRepo: json['github_repo'],
     gitlabToken: json['gitlab_token'],

@@ -216,7 +216,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    _getStatusText(transcriptionState.status),
+                    _getStatusText(transcriptionState),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
@@ -372,8 +372,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  String _getStatusText(TranscriptionStatus status) {
-    switch (status) {
+  String _getStatusText(TranscriptionState state) {
+    switch (state.status) {
       case TranscriptionStatus.idle:
         return 'Tap to start recording';
       case TranscriptionStatus.recording:
@@ -381,7 +381,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case TranscriptionStatus.processing:
         return 'Initializing...';
       case TranscriptionStatus.transcribing:
-        return 'Processing...';
+        final s = state.transcribingElapsedSeconds;
+        return 'Transcribing... ${s}s';
       case TranscriptionStatus.completed:
         return 'Recording complete!';
       case TranscriptionStatus.error:

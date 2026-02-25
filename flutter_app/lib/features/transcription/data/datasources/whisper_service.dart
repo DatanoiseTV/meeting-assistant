@@ -32,6 +32,7 @@ class TranscriptionState {
   final double audioLevel;
   final String? errorMessage;
   final int progress;
+  final int transcribingElapsedSeconds;
 
   const TranscriptionState({
     this.status = TranscriptionStatus.idle,
@@ -40,6 +41,7 @@ class TranscriptionState {
     this.audioLevel = 0.0,
     this.errorMessage,
     this.progress = 0,
+    this.transcribingElapsedSeconds = 0,
   });
 
   TranscriptionState copyWith({
@@ -49,6 +51,7 @@ class TranscriptionState {
     double? audioLevel,
     String? errorMessage,
     int? progress,
+    int? transcribingElapsedSeconds,
   }) {
     return TranscriptionState(
       status: status ?? this.status,
@@ -57,6 +60,8 @@ class TranscriptionState {
       audioLevel: audioLevel ?? this.audioLevel,
       errorMessage: errorMessage,
       progress: progress ?? this.progress,
+      transcribingElapsedSeconds:
+          transcribingElapsedSeconds ?? this.transcribingElapsedSeconds,
     );
   }
 }
