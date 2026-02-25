@@ -10,6 +10,7 @@ class AppConfig {
   final String persona;
   final String speechLanguage;
   final bool enableResearch;
+  final bool useWhisper;
   final String? githubToken;
   final String? githubRepo;
   final String? gitlabToken;
@@ -30,6 +31,7 @@ class AppConfig {
     this.persona = 'general',
     this.speechLanguage = 'en_US',
     this.enableResearch = false,
+    this.useWhisper = false,
     this.githubToken,
     this.githubRepo,
     this.gitlabToken,
@@ -50,6 +52,7 @@ class AppConfig {
     String? persona,
     String? speechLanguage,
     bool? enableResearch,
+    bool? useWhisper,
     String? githubToken,
     String? githubRepo,
     String? gitlabToken,
@@ -69,6 +72,7 @@ class AppConfig {
       persona: persona ?? this.persona,
       speechLanguage: speechLanguage ?? this.speechLanguage,
       enableResearch: enableResearch ?? this.enableResearch,
+      useWhisper: useWhisper ?? this.useWhisper,
       githubToken: githubToken ?? this.githubToken,
       githubRepo: githubRepo ?? this.githubRepo,
       gitlabToken: gitlabToken ?? this.gitlabToken,
@@ -90,6 +94,7 @@ class AppConfig {
     'persona': persona,
     'speech_language': speechLanguage,
     'enable_research': enableResearch,
+    'use_whisper': useWhisper,
     'github_token': githubToken,
     'github_repo': githubRepo,
     'gitlab_token': gitlabToken,
@@ -112,6 +117,7 @@ class AppConfig {
     persona: json['persona'] ?? 'general',
     speechLanguage: json['speech_language'] ?? 'en_US',
     enableResearch: json['enable_research'] ?? false,
+    useWhisper: json['use_whisper'] ?? false,
     githubToken: json['github_token'],
     githubRepo: json['github_repo'],
     gitlabToken: json['gitlab_token'],

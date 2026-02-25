@@ -86,6 +86,22 @@ class _SettingsScreenContentState extends ConsumerState<SettingsScreenContent> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Offline Transcription'),
+                        subtitle: const Text(
+                          'Use on-device Whisper model instead of live speech recognition. Downloads ~75 MB on first use.',
+                        ),
+                        secondary: const Icon(Icons.offline_bolt),
+                        value: config.useWhisper,
+                        onChanged: (val) {
+                          final current = ref.read(settingsProvider).value!;
+                          ref
+                              .read(settingsProvider.notifier)
+                              .updateConfig(current.copyWith(useWhisper: val));
+                        },
+                      ),
+                      const Divider(height: 24),
                       _buildLanguageSelector(
                         context,
                         ref,

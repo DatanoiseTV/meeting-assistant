@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../data/datasources/whisper_service.dart';
+import '../../data/datasources/whisper_transcription_service.dart';
 import '../../domain/entities/meeting.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
 
@@ -19,34 +20,57 @@ final audioRecordingServiceProvider = Provider<AudioRecordingService>((ref) {
   return service;
 });
 
+final whisperTranscriptionServiceProvider =
+    Provider<WhisperTranscriptionService>((ref) {
+      final service = WhisperTranscriptionService();
+      ref.onDispose(() => service.dispose());
+      return service;
+    });
+
 final transcriptionProvider =
     StateNotifierProvider<TranscriptionNotifier, TranscriptionState>((ref) {
-      final whisperService = ref.watch(whisperServiceProvider);
+      final speechService = ref.watch(whisperServiceProvider);
       final audioService = ref.watch(audioRecordingServiceProvider);
+      final whisperOfflineService = ref.watch(
+        whisperTranscriptionServiceProvider,
+      );
       final settings = ref.watch(settingsProvider);
 
       String localeId = 'en_US';
+      bool useWhisper = false;
       settings.whenData((config) {
         localeId = config.speechLanguage;
+        useWhisper = config.useWhisper;
       });
 
-      whisperService.setLocale(localeId);
+      speechService.setLocale(localeId);
 
-      return TranscriptionNotifier(whisperService, audioService);
+      return TranscriptionNotifier(
+        speechService,
+        audioService,
+        whisperOfflineService,
+        useWhisper,
+      );
     });
 
 class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
-  final WhisperService _whisperService;
+  final WhisperService _speechService;
   final AudioRecordingService _audioService;
+  final WhisperTranscriptionService _whisperOfflineService;
+  final bool _useWhisper;
   DateTime? _recordingStartTime;
 
-  TranscriptionNotifier(this._whisperService, this._audioService)
-    : super(const TranscriptionState());
+  TranscriptionNotifier(
+    this._speechService,
+    this._audioService,
+    this._whisperOfflineService,
+    this._useWhisper,
+  ) : super(const TranscriptionState());
 
   Future<void> initializeWhisper() async {
     state = state.copyWith(status: TranscriptionStatus.processing);
     try {
-      await _whisperService.initialize();
+      await _speechService.initialize();
       state = state.copyWith(status: TranscriptionStatus.idle);
     } catch (e) {
       state = state.copyWith(
@@ -67,15 +91,20 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
         return;
       }
 
-      await _whisperService.initialize();
       _recordingStartTime = DateTime.now();
-
       state = state.copyWith(
         status: TranscriptionStatus.recording,
         transcription: '',
       );
 
-      await _startListeningWithAutoRestart();
+      if (_useWhisper) {
+        // Offline mode: record audio to file, transcribe after stopping
+        await _audioService.startRecording();
+      } else {
+        // Live mode: stream speech recognition
+        await _speechService.initialize();
+        await _startLiveSpeechRecognition();
+      }
     } catch (e) {
       state = state.copyWith(
         status: TranscriptionStatus.error,
@@ -84,10 +113,10 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
     }
   }
 
-  Future<void> _startListeningWithAutoRestart() async {
-    _whisperService.setOnDoneCallback(null);
+  Future<void> _startLiveSpeechRecognition() async {
+    _speechService.setOnDoneCallback(null);
 
-    await _whisperService.startListening(
+    await _speechService.startListening(
       onResult: (text) {
         if (mounted) {
           state = state.copyWith(transcription: text);
@@ -102,14 +131,9 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
         }
       },
       onDone: () {
-        // Only restart if we're still supposed to be recording
-        // and there's transcription data
         if (mounted &&
             state.status == TranscriptionStatus.recording &&
             state.transcription.isNotEmpty) {
-          // Don't auto-restart - just keep the transcription
-          // iOS will timeout after ~60 seconds of continuous speech
-          // The user should manually stop when done
           print('Speech recognition ended - transcription preserved');
         }
       },
@@ -118,10 +142,6 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
 
   Future<void> stopRecording() async {
     try {
-      await _whisperService.stopListening();
-
-      final transcription = _whisperService.fullTranscription;
-
       int? durationSeconds;
       if (_recordingStartTime != null) {
         durationSeconds = DateTime.now()
@@ -130,15 +150,50 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
         _recordingStartTime = null;
       }
 
-      state = state.copyWith(
-        status: TranscriptionStatus.completed,
-        transcription: transcription,
-      );
+      if (_useWhisper) {
+        // Offline mode: stop recording, then run whisper transcription
+        state = state.copyWith(status: TranscriptionStatus.transcribing);
 
-      // Meeting will be created when navigating to the meeting detail
-      print(
-        'Recording complete: ${transcription.length} chars, duration: ${durationSeconds}s',
-      );
+        final audioPath = await _audioService.stopRecording();
+        if (audioPath == null) {
+          state = state.copyWith(
+            status: TranscriptionStatus.error,
+            errorMessage: 'No audio recorded',
+          );
+          return;
+        }
+
+        try {
+          final transcription = await _whisperOfflineService.transcribe(
+            audioPath: audioPath,
+          );
+          state = state.copyWith(
+            status: TranscriptionStatus.completed,
+            transcription: transcription,
+          );
+          // Clean up audio file after transcription
+          try {
+            await File(audioPath).delete();
+          } catch (_) {}
+        } catch (e) {
+          state = state.copyWith(
+            status: TranscriptionStatus.error,
+            errorMessage: 'Whisper transcription failed: $e',
+          );
+        }
+      } else {
+        // Live mode: stop speech recognition
+        await _speechService.stopListening();
+        final transcription = _speechService.fullTranscription;
+
+        state = state.copyWith(
+          status: TranscriptionStatus.completed,
+          transcription: transcription,
+        );
+        print(
+          'Recording complete: ${transcription.length} chars, duration: ${durationSeconds}s',
+        );
+      }
     } catch (e) {
       state = state.copyWith(
         status: TranscriptionStatus.error,
@@ -148,7 +203,11 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
   }
 
   void cancelRecording() {
-    _whisperService.stopListening();
+    if (_useWhisper) {
+      _audioService.cancelRecording();
+    } else {
+      _speechService.stopListening();
+    }
     _recordingStartTime = null;
     state = state.copyWith(status: TranscriptionStatus.idle);
   }
