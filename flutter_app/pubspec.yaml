@@ -33,10 +33,19 @@ dependencies:
   flutter_markdown: ^0.7.7
   url_launcher: ^6.3.1
   graphview: ^1.2.0
+  file_picker: ^8.1.7
+  
+  # PDF Generation
+  pdf: ^3.11.2
+  printing: ^5.14.2
+  
+  # Internationalization
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
   
   # Utilities
   uuid: ^4.5.1
-  intl: ^0.20.2
   collection: ^1.19.1
 
 dev_dependencies:
@@ -46,6 +55,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
   
   assets:
     - assets/

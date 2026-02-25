@@ -4,6 +4,7 @@ class AppConfig {
   final String provider;
   final String apiKey;
   final String llmModel;
+  final String? customApiUrl;
   final String outputDir;
   final String obsidianVaultPath;
   final String persona;
@@ -23,6 +24,7 @@ class AppConfig {
     this.provider = 'gemini',
     this.apiKey = '',
     this.llmModel = 'gemini-2.5-flash-lite',
+    this.customApiUrl,
     this.outputDir = '',
     this.obsidianVaultPath = '',
     this.persona = 'general',
@@ -42,6 +44,7 @@ class AppConfig {
     String? provider,
     String? apiKey,
     String? llmModel,
+    String? customApiUrl,
     String? outputDir,
     String? obsidianVaultPath,
     String? persona,
@@ -60,6 +63,7 @@ class AppConfig {
       provider: provider ?? this.provider,
       apiKey: apiKey ?? this.apiKey,
       llmModel: llmModel ?? this.llmModel,
+      customApiUrl: customApiUrl ?? this.customApiUrl,
       outputDir: outputDir ?? this.outputDir,
       obsidianVaultPath: obsidianVaultPath ?? this.obsidianVaultPath,
       persona: persona ?? this.persona,
@@ -80,6 +84,7 @@ class AppConfig {
     'provider': provider,
     'api_key': apiKey,
     'llm_model': llmModel,
+    'custom_api_url': customApiUrl,
     'output_dir': outputDir,
     'obsidian_vault_path': obsidianVaultPath,
     'persona': persona,
@@ -101,6 +106,7 @@ class AppConfig {
     provider: json['provider'] ?? 'gemini',
     apiKey: json['api_key'] ?? '',
     llmModel: json['llm_model'] ?? 'gemini-2.5-flash-lite',
+    customApiUrl: json['custom_api_url'],
     outputDir: json['output_dir'] ?? '',
     obsidianVaultPath: json['obsidian_vault_path'] ?? '',
     persona: json['persona'] ?? 'general',

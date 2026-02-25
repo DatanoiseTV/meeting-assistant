@@ -42,9 +42,22 @@ class QuotaInfo {
 class LLMService {
   final String apiKey;
   final String model;
+  final String? customUrl;
+  final String _baseUrl;
+  final String _modelsUrl;
+  final String _generateUrl;
 
   static const int maxRetries = 1;
   static const int initialRetryDelayMs = 2000;
+
+  LLMService({required this.apiKey, required this.model, this.customUrl})
+    : _baseUrl = customUrl ?? 'https://generativelanguage.googleapis.com',
+      _modelsUrl =
+          '${customUrl ?? 'https://generativelanguage.googleapis.com'}/v1beta/models?key=$apiKey',
+      _generateUrl =
+          '${customUrl ?? 'https://generativelanguage.googleapis.com'}/v1beta/models/\$modelName:generateContent?key=$apiKey';
+
+  String get generateUrl => _generateUrl.replaceAll('\$modelName', model);
 
   static const List<String> flashModels = [
     'gemini-2.5-flash',
@@ -89,8 +102,6 @@ All fields should be strings or arrays of strings.''';
 }
 ''';
 
-  LLMService({required this.apiKey, required this.model});
-
   static const String _systemPrompt =
       '''You are a professional meeting assistant that analyzes transcriptions and creates structured summaries. 
 
@@ -103,6 +114,8 @@ All list fields must be proper JSON arrays like ["item1", "item2"] - never use:
 OUTPUT FORMAT REQUIREMENTS:
 - Keep descriptions concise but informative
 - If no information available, write "None recorded" (not N/A, none, etc.)
+- TAGS: lowercase_with_underscores, no spaces (e.g. ["product_launch", "team_meeting", "budget_review"])
+- ACTION_ITEMS: plain text array only, NO checkboxes, NO brackets like [x] or [ ]. Just plain strings: ["Complete code review", "Send email"]
 
 JSON STRUCTURE:
 All fields should be strings.''';
@@ -135,13 +148,9 @@ All fields should be strings.''';
 }
 ''';
 
-  static Future<List<String>> fetchAvailableModels(String apiKey) async {
+  Future<List<String>> fetchAvailableModels() async {
     try {
-      final response = await http.get(
-        Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey',
-        ),
-      );
+      final response = await http.get(Uri.parse(_modelsUrl));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -238,9 +247,7 @@ All fields should be strings.''';
   ) async {
     try {
       final response = await http.post(
-        Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey',
-        ),
+        Uri.parse(generateUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'systemInstruction': {
@@ -409,9 +416,7 @@ ${json['researchComments'] ?? ''}''';
   ) async {
     try {
       final response = await http.post(
-        Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey',
-        ),
+        Uri.parse(generateUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'systemInstruction': {

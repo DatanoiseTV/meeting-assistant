@@ -15,6 +15,7 @@ final llmServiceProvider = Provider<LLMService?>((ref) {
       final llmService = LLMService(
         apiKey: config.apiKey,
         model: config.llmModel,
+        customUrl: config.customApiUrl,
       );
 
       print('LLM Service Configured: Model=${config.llmModel}');
@@ -544,11 +545,12 @@ Please analyze the following meeting transcription and provide a structured repo
 $transcription
 
 OUTPUT FORMAT REQUIREMENTS:
-- ACTION_ITEMS: JSON array only, NO dashes/bullets. Example: ["Complete code review", "Send email"]
+- ACTION_ITEMS: plain text JSON array only, NO checkboxes, NO [x] or [ ]. Example: ["Complete code review", "Send email"]
 - SUGGESTIONS: JSON array only. Example: ["Consider using async", "Add tests"]
 - KEY_TAKEAWAYS: JSON array only. Example: ["First insight", "Second insight"]
 - DECISIONS: JSON array only. Example: ["Approved budget", "Postponed launch"]
 - QUESTIONS: JSON array only. Example: ["Question 1", "Question 2"]
+- TAGS: lowercase_with_underscores, no spaces. Example: ["product_launch", "team_meeting", "q4_planning"]
 - TAGLINE: One line only, max 10 words
 
 GRAPH_DATA: node1->node2;node2->node3 (semicolon separated)

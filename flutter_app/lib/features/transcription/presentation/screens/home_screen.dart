@@ -9,6 +9,8 @@ import '../providers/meetings_provider.dart';
 import '../widgets/record_button.dart';
 import '../widgets/transcription_view.dart';
 import '../../domain/entities/meeting.dart';
+import '../../data/services/pdf_export_service.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -41,6 +43,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           children: [
             _buildRecordView(context),
             _buildMeetingsListView(context),
+            _buildSearchView(context),
             _buildTodosView(context),
             const SettingsScreenContent(),
           ],
@@ -64,6 +67,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             icon: Icon(Icons.list_alt_outlined),
             selectedIcon: Icon(Icons.list_alt),
             label: 'Meetings',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.search),
+            selectedIcon: Icon(Icons.search),
+            label: 'Search',
           ),
           const NavigationDestination(
             icon: Icon(Icons.check_circle_outline),
@@ -141,6 +149,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(height: 8),
               ],
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: () {
+                  ref
+                      .read(transcriptionProvider.notifier)
+                      .importTranscriptFromFile();
+                },
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Import from file'),
+              ),
             ],
           ),
         ),
@@ -271,6 +289,141 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               }
             }
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchView(BuildContext context) {
+    final meetings = ref.watch(meetingsProvider);
+    final searchController = TextEditingController();
+
+    return StatefulBuilder(
+      builder: (context, setSearchState) {
+        final query = searchController.text.toLowerCase();
+        final filteredMeetings = query.isEmpty
+            ? <Meeting>[]
+            : meetings.where((m) {
+                final title = m.title?.toLowerCase() ?? '';
+                final summary = m.summary?.toLowerCase() ?? '';
+                final transcription = m.transcription.toLowerCase();
+                final tags = m.tags?.toLowerCase() ?? '';
+                return title.contains(query) ||
+                    summary.contains(query) ||
+                    transcription.contains(query) ||
+                    tags.contains(query);
+              }).toList();
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search meetings...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  suffixIcon: query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            searchController.clear();
+                            setSearchState(() {});
+                          },
+                        )
+                      : null,
+                ),
+                onChanged: (_) => setSearchState(() {}),
+              ),
+            ),
+            Expanded(
+              child: query.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search,
+                            size: 64,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Search your meetings',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Find by title, content, or tags',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    )
+                  : filteredMeetings.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No results found',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: filteredMeetings.length,
+                      itemBuilder: (context, index) {
+                        final meeting = filteredMeetings[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.article,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              meeting.title ?? 'Untitled Meeting',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              meeting.summary ?? meeting.transcription,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => MeetingDetailScreen(
+                                    meetingId: meeting.id,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         );
       },
     );
@@ -633,6 +786,13 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            onPressed: () async {
+              final pdfService = PdfExportService();
+              await pdfService.sharePdf(meeting);
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.delete_outline),
             onPressed: () async {
               final confirmed = await showDialog<bool>(
@@ -695,148 +855,6 @@ class _MeetingDetailScreenState extends ConsumerState<MeetingDetailScreen> {
         researchRecommendations: meeting.researchRecommendations,
         researchComments: meeting.researchComments,
       ),
-    );
-  }
-}
-
-class SettingsScreenContent extends ConsumerWidget {
-  const SettingsScreenContent({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final settingsAsync = ref.watch(settingsProvider);
-
-    return settingsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
-      data: (config) => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Settings',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 24),
-          _buildSectionTitle(context, 'AI Analysis (Gemini)'),
-          const SizedBox(height: 12),
-          _buildApiKeyField(context, ref, config.apiKey),
-          const SizedBox(height: 12),
-          _buildModelField(context, ref, config.llmModel),
-          const SizedBox(height: 24),
-          _buildSectionTitle(context, 'Speech Recognition'),
-          const SizedBox(height: 12),
-          _buildLanguageSelector(context, ref, config.speechLanguage),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(BuildContext context, String title) => Text(
-    title,
-    style: Theme.of(
-      context,
-    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-  );
-
-  Widget _buildApiKeyField(BuildContext context, WidgetRef ref, String value) {
-    return TextFormField(
-      initialValue: value,
-      decoration: const InputDecoration(
-        labelText: 'API Key',
-        hintText: 'Enter your Gemini API key',
-        prefixIcon: Icon(Icons.key),
-      ),
-      obscureText: true,
-      autocorrect: false,
-      enableSuggestions: false,
-      onChanged: (val) {
-        final current = ref.read(settingsProvider).value!;
-        ref
-            .read(settingsProvider.notifier)
-            .updateConfig(current.copyWith(apiKey: val));
-      },
-    );
-  }
-
-  static const List<Map<String, String>> _geminiModels = [
-    {'id': 'gemini-2.5-flash', 'name': 'Gemini 2.5 Flash (Recommended)'},
-    {'id': 'gemini-2.5-flash-lite', 'name': 'Gemini 2.5 Flash-Lite'},
-    {'id': 'gemini-flash-latest', 'name': 'Gemini Flash Latest'},
-    {'id': 'gemini-flash-lite-latest', 'name': 'Gemini Flash-Lite Latest'},
-    {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash'},
-    {'id': 'gemini-2.0-flash-lite', 'name': 'Gemini 2.0 Flash-Lite'},
-  ];
-
-  Widget _buildModelField(BuildContext context, WidgetRef ref, String value) {
-    final selectedModel = _geminiModels.firstWhere(
-      (m) => m['id'] == value,
-      orElse: () => _geminiModels.first,
-    );
-    return DropdownButtonFormField<String>(
-      value: selectedModel['id'],
-      isExpanded: true,
-      decoration: const InputDecoration(
-        labelText: 'Model',
-        prefixIcon: Icon(Icons.model_training),
-      ),
-      items: _geminiModels
-          .map(
-            (m) => DropdownMenuItem(
-              value: m['id'],
-              child: Text(m['name']!, overflow: TextOverflow.ellipsis),
-            ),
-          )
-          .toList(),
-      onChanged: (val) {
-        if (val != null) {
-          final current = ref.read(settingsProvider).value!;
-          ref
-              .read(settingsProvider.notifier)
-              .updateConfig(current.copyWith(llmModel: val));
-        }
-      },
-    );
-  }
-
-  static const Map<String, String> _languages = {
-    'en_US': 'English (US)',
-    'en_GB': 'English (UK)',
-    'de_DE': 'German',
-    'fr_FR': 'French',
-    'es_ES': 'Spanish',
-    'it_IT': 'Italian',
-    'pt_BR': 'Portuguese',
-    'nl_NL': 'Dutch',
-    'ru_RU': 'Russian',
-    'zh_CN': 'Chinese',
-    'ja_JP': 'Japanese',
-    'ko_KR': 'Korean',
-  };
-
-  Widget _buildLanguageSelector(
-    BuildContext context,
-    WidgetRef ref,
-    String value,
-  ) {
-    return DropdownButtonFormField<String>(
-      value: _languages.containsKey(value) ? value : 'en_US',
-      decoration: const InputDecoration(
-        labelText: 'Language',
-        prefixIcon: Icon(Icons.language),
-      ),
-      items: _languages.entries
-          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
-          .toList(),
-      onChanged: (val) {
-        if (val != null) {
-          final current = ref.read(settingsProvider).value!;
-          ref
-              .read(settingsProvider.notifier)
-              .updateConfig(current.copyWith(speechLanguage: val));
-        }
-      },
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -366,7 +367,7 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
                         top: 0,
                         bottom: 0,
                         child: Container(
-                          width: 24,
+                          width: 32,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
@@ -377,10 +378,35 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
                               ],
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.chevron_left,
-                            size: 16,
-                            color: Colors.grey,
+                            size: 24,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    // Right fade indicator
+                    if (_showRightArrow)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 32,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).colorScheme.surface,
+                                Theme.of(
+                                  context,
+                                ).colorScheme.surface.withOpacity(0),
+                              ],
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.chevron_left,
+                            size: 24,
+                            color: Colors.grey.shade700,
                           ),
                         ),
                       ),
@@ -402,10 +428,10 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
                               ],
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.chevron_right,
-                            size: 16,
-                            color: Colors.grey,
+                            size: 24,
+                            color: Colors.grey.shade700,
                           ),
                         ),
                       ),
@@ -1053,8 +1079,7 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
             _buildContentCard(context, 'Key Takeaways', report.keyTakeaways),
           if (_hasContent(report.participants))
             _buildContentCard(context, 'Participants', report.participants),
-          if (_hasContent(report.tags))
-            _buildContentCard(context, 'Tags', report.tags),
+          if (_hasContent(report.tags)) _buildTagsCard(context, report.tags),
         ],
       ),
     );
@@ -1074,6 +1099,51 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
           if (_hasContent(report.emailDraft))
             _buildEmailCard(context, report.emailDraft),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTagsCard(BuildContext context, String tags) {
+    final tagList = _parseList(tags);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tags',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: tagList.map((tag) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    tag.replaceAll('_', ' '),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1199,7 +1269,7 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
                   graph: graph,
                   algorithm: SugiyamaAlgorithm(builder),
                   paint: Paint()
-                    ..color = Colors.orange.shade700
+                    ..color = Theme.of(context).colorScheme.primary
                     ..strokeWidth = 2
                     ..style = PaintingStyle.stroke,
                   builder: (Node node) {
@@ -1216,12 +1286,13 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
   }
 
   Widget _buildGraphNode(BuildContext context, String label) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.orange.shade100,
+        color: primaryColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.orange.shade700, width: 1.5),
+        border: Border.all(color: primaryColor, width: 1.5),
       ),
       child: Text(
         label,
@@ -1276,37 +1347,15 @@ class _TranscriptionViewState extends ConsumerState<TranscriptionView> {
   List<String> _parseList(String text) {
     if (text.isEmpty) return [];
 
-    // If it looks like a JSON array, try to parse it
-    if (text.trim().startsWith('[')) {
-      try {
-        final cleaned = text.trim();
-        if (cleaned.startsWith('[') && cleaned.endsWith(']')) {
-          final inner = cleaned.substring(1, cleaned.length - 1);
-          final result = <String>[];
-          var current = StringBuffer();
-          var inQuote = false;
-          var escape = false;
+    final trimmed = text.trim();
 
-          for (var i = 0; i < inner.length; i++) {
-            final c = inner[i];
-            if (escape) {
-              current.write(c);
-              escape = false;
-            } else if (c == '\\') {
-              escape = true;
-            } else if (c == '"') {
-              inQuote = !inQuote;
-            } else if (c == ',' && !inQuote) {
-              result.add(current.toString().trim());
-              current = StringBuffer();
-            } else {
-              current.write(c);
-            }
-          }
-          if (current.isNotEmpty) {
-            result.add(current.toString().trim());
-          }
-          if (result.isNotEmpty) return result;
+    // If it looks like a JSON array, try to parse it properly
+    if (trimmed.startsWith('[')) {
+      try {
+        // Use dart's jsonDecode for proper parsing
+        final decoded = jsonDecode(trimmed);
+        if (decoded is List) {
+          return decoded.map((e) => e.toString()).toList();
         }
       } catch (_) {}
     }

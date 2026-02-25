@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../data/datasources/whisper_service.dart';
 import '../../domain/entities/meeting.dart';
 import '../../../settings/presentation/providers/settings_provider.dart';
@@ -149,6 +151,67 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
     _whisperService.stopListening();
     _recordingStartTime = null;
     state = state.copyWith(status: TranscriptionStatus.idle);
+  }
+
+  Future<void> importTranscriptFromFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          'txt',
+          'text',
+          'm4a',
+          'mp3',
+          'wav',
+          'aac',
+          'mp4',
+          'mov',
+        ],
+        allowMultiple: false,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+
+      state = state.copyWith(status: TranscriptionStatus.processing);
+
+      if (file.extension == 'txt' || file.extension == 'text') {
+        // Read text file directly
+        final bytes = file.bytes;
+        if (bytes != null) {
+          final content = String.fromCharCodes(bytes);
+          state = state.copyWith(
+            status: TranscriptionStatus.completed,
+            transcription: content,
+          );
+          return;
+        }
+
+        // Try reading from path
+        if (file.path != null) {
+          final content = await File(file.path!).readAsString();
+          state = state.copyWith(
+            status: TranscriptionStatus.completed,
+            transcription: content,
+          );
+          return;
+        }
+      }
+
+      // For audio files, show message that transcription requires manual processing
+      // or implement audio transcription service
+      state = state.copyWith(
+        status: TranscriptionStatus.error,
+        errorMessage:
+            'Audio file import requires transcription service. Please use microphone to record.',
+      );
+    } catch (e) {
+      state = state.copyWith(
+        status: TranscriptionStatus.error,
+        errorMessage: 'Failed to import file: $e',
+      );
+    }
   }
 
   void reset() {
