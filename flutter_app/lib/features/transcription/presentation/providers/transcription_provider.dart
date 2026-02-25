@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
@@ -155,6 +156,7 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
         state = state.copyWith(status: TranscriptionStatus.transcribing);
 
         final audioPath = await _audioService.stopRecording();
+        debugPrint('[Whisper] Audio path after stop: $audioPath');
         if (audioPath == null) {
           state = state.copyWith(
             status: TranscriptionStatus.error,
@@ -163,10 +165,15 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
           return;
         }
 
+        final locale = _localeId;
+        debugPrint('[Whisper] Using locale: $locale, useWhisper: $_useWhisper');
+
         try {
           final transcription = await _whisperOfflineService.transcribe(
             audioPath: audioPath,
+            language: locale,
           );
+          debugPrint('[Whisper] Final transcription: "$transcription"');
           state = state.copyWith(
             status: TranscriptionStatus.completed,
             transcription: transcription,
@@ -176,6 +183,7 @@ class TranscriptionNotifier extends StateNotifier<TranscriptionState> {
             await File(audioPath).delete();
           } catch (_) {}
         } catch (e) {
+          debugPrint('[Whisper] stopRecording transcription error: $e');
           state = state.copyWith(
             status: TranscriptionStatus.error,
             errorMessage: 'Whisper transcription failed: $e',

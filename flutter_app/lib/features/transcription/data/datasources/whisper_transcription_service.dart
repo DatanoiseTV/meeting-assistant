@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:whisper_flutter_new/whisper_flutter_new.dart';
 
 class WhisperTranscriptionService {
@@ -23,12 +25,19 @@ class WhisperTranscriptionService {
 
     try {
       final version = await _whisper!.getVersion();
-      print('Whisper version: $version');
+      debugPrint('[Whisper] Initialized: $version');
       _isInitialized = true;
     } catch (e) {
-      print('Failed to initialize Whisper: $e');
+      debugPrint('[Whisper] Init failed: $e');
       rethrow;
     }
+  }
+
+  // Convert a locale string like "en_US" or "de_DE" to a Whisper language
+  // code like "en" or "de". Whisper expects ISO 639-1 codes or "auto".
+  static String _toWhisperLang(String locale) {
+    if (locale == 'auto') return 'auto';
+    return locale.split('_').first.toLowerCase();
   }
 
   Future<String> transcribe({
@@ -41,9 +50,19 @@ class WhisperTranscriptionService {
       await initialize(model: _currentModel);
     }
 
+    final file = File(audioPath);
+    if (!await file.exists()) {
+      throw Exception('[Whisper] Audio file not found: $audioPath');
+    }
+    final size = await file.length();
+    debugPrint('[Whisper] Transcribing: $audioPath ($size bytes)');
+
+    final whisperLang = _toWhisperLang(language);
+    debugPrint('[Whisper] Language: $whisperLang');
+
     final request = TranscribeRequest(
       audio: audioPath,
-      language: language,
+      language: whisperLang,
       isTranslate: translateToEnglish,
       isNoTimestamps: !withTimestamps,
       splitOnWord: false,
@@ -53,9 +72,10 @@ class WhisperTranscriptionService {
       final WhisperTranscribeResponse result = await _whisper!.transcribe(
         transcribeRequest: request,
       );
-      return result.text ?? '';
+      debugPrint('[Whisper] Result: "${result.text}"');
+      return result.text;
     } catch (e) {
-      print('Transcription error: $e');
+      debugPrint('[Whisper] Transcription error: $e');
       rethrow;
     }
   }
